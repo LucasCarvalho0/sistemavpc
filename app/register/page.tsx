@@ -265,10 +265,10 @@ export default function RegisterPage() {
                 <div
                   key={i}
                   className={`flex-1 h-10 flex items-center justify-center rounded-lg text-sm font-mono font-bold border transition-all duration-300 ${i < vinLen
-                      ? vinBlocked
-                        ? 'bg-red-500/20 border-red-500/40 text-red-300 scale-110 z-10'
-                        : 'bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-glow-blue-sm scale-110 z-10'
-                      : 'bg-slate-900 border-slate-800 text-slate-700'
+                    ? vinBlocked
+                      ? 'bg-red-500/20 border-red-500/40 text-red-300 scale-110 z-10'
+                      : 'bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-glow-blue-sm scale-110 z-10'
+                    : 'bg-slate-900 border-slate-800 text-slate-700'
                     }`}
                 >
                   {vin?.[i] ?? ''}
@@ -285,7 +285,7 @@ export default function RegisterPage() {
             >
               <div className="flex h-full w-full items-center justify-center gap-3 rounded-[15px] bg-slate-950/20 transition-colors group-hover:bg-slate-950/10">
                 <ScanLine className="w-7 h-7 text-white" />
-                <span className="text-xl text-white uppercase tracking-wider">Scanner VIN</span>
+                <span className="text-xl text-white uppercase tracking-wider">SCAN VIN</span>
               </div>
             </button>
 
@@ -294,10 +294,10 @@ export default function RegisterPage() {
               size="xl"
               disabled={submitting || vinBlocked || checking}
               className={`h-20 w-full rounded-2xl text-xl uppercase tracking-[0.15em] font-black transition-all hover:scale-[1.01] active:scale-95 ${vinBlocked
-                  ? 'bg-red-900/50 text-red-400 cursor-not-allowed border border-red-500/30'
-                  : vinOk
-                    ? 'bg-green-600 hover:bg-green-500 text-white shadow-glow-green'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                ? 'bg-red-900/50 text-red-400 cursor-not-allowed border border-red-500/30'
+                : vinOk
+                  ? 'bg-green-600 hover:bg-green-500 text-white shadow-glow-green'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                 }`}
             >
               {submitting ? (
