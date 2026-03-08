@@ -1,0 +1,44 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Employee {
+  id          String       @id @default(cuid())
+  name        String
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  productions Production[]
+
+  @@map("employees")
+}
+
+model Production {
+  id         String   @id @default(cuid())
+  vin        String
+  carVersion String
+  employeeId String
+  shiftDate  String
+  createdAt  DateTime @default(now())
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([vin, shiftDate])
+  @@index([shiftDate])
+  @@index([employeeId])
+  @@map("productions")
+}
+
+model ShiftConfig {
+  id        String   @id @default(cuid())
+  shiftDate String   @unique
+  goal      Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shift_configs")
+}
