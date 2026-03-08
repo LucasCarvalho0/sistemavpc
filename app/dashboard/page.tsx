@@ -141,6 +141,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Production by Version */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {dashboardStats?.versionData?.map((v) => (
+          <div key={v.version} className="card flex items-center justify-between border-l-4 border-l-blue-500 overflow-hidden group">
+            <div className="flex flex-col">
+              <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Versão</span>
+              <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{v.version}</span>
+            </div>
+            <div className="bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-500/20">
+              <span className="stat-num text-2xl text-blue-400">{v.count}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Chart */}
       <ProductionChart data={dashboardStats?.hourlyData ?? []} />
 

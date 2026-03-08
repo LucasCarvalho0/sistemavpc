@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const shiftDate = getShiftDate()
 
-    const [totalToday, recentProductions, allToday, config] = await Promise.all([
+    const [totalToday, recentProductions, allToday, config, versionDataRaw] = await Promise.all([
       prisma.production.count({ where: { shiftDate } }),
       prisma.production.findMany({
         where: { shiftDate },
@@ -21,9 +21,20 @@ export async function GET() {
         orderBy: { createdAt: 'asc' },
       }),
       prisma.shiftConfig.findUnique({ where: { shiftDate } }),
+      prisma.production.groupBy({
+        by: ['carVersion'],
+        where: { shiftDate },
+        _count: { _all: true },
+        orderBy: { _count: { carVersion: 'desc' } }
+      })
     ])
 
     const goal = config?.goal ?? DAILY_GOAL
+
+    const versionData = versionDataRaw.map((v: any) => ({
+      version: v.carVersion as string,
+      count: v._count._all as number
+    }))
 
     // Build hourly chart data
     const map = new Map<string, number>()
@@ -40,7 +51,7 @@ export async function GET() {
       })
 
     return NextResponse.json({
-      data: { totalToday, goal, hourlyData, recentProductions },
+      data: { totalToday, goal, hourlyData, recentProductions, versionData },
     })
   } catch (e: any) {
     console.error('DASHBOARD_API_ERROR:', e)

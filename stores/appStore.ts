@@ -97,6 +97,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
         const lastAcc = hourlyData[hourlyData.length - 1]?.accumulated ?? 0
         hourlyData = [...hourlyData, { hour: currentHour, count: 1, accumulated: lastAcc + 1 }]
       }
+      // Update Version Data
+      let versionData = s.dashboardStats.versionData || []
+      const existingVersion = versionData.find(v => v.version === prod.carVersion)
+      if (existingVersion) {
+        versionData = versionData.map(v => v.version === prod.carVersion ? { ...v, count: v.count + 1 } : v)
+      } else {
+        versionData = [...versionData, { version: prod.carVersion, count: 1 }]
+      }
+
       const newTotal = s.dashboardStats.totalToday + 1
       const newGoalReached = newTotal >= s.dashboardStats.goal
       return {
@@ -104,6 +113,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...s.dashboardStats,
           totalToday: newTotal,
           hourlyData,
+          versionData,
           recentProductions: [prod, ...s.dashboardStats.recentProductions.slice(0, 19)],
         },
         goalReached: newGoalReached,
@@ -174,6 +184,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
               ...s.dashboardStats,
               totalToday: s.dashboardStats.totalToday + 1,
               recentProductions: [prod, ...s.dashboardStats.recentProductions.slice(0, 9)],
+              versionData: (() => {
+                let vd = s.dashboardStats.versionData || []
+                const existing = vd.find(v => v.version === prod.carVersion)
+                if (existing) {
+                  return vd.map(v => v.version === prod.carVersion ? { ...v, count: v.count + 1 } : v)
+                }
+                return [...vd, { version: prod.carVersion, count: 1 }]
+              })(),
             }
             : null,
         }

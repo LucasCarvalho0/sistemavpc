@@ -21,11 +21,17 @@ export interface HourlyData {
   accumulated: number
 }
 
+export interface VersionData {
+  version: string
+  count: number
+}
+
 export interface DashboardStats {
   totalToday: number
   goal: number
   hourlyData: HourlyData[]
   recentProductions: Production[]
+  versionData: VersionData[]
   shiftStart?: string
   shiftEnd?: string
 }
