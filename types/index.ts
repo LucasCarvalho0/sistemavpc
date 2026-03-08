@@ -32,6 +32,7 @@ export interface DashboardStats {
   hourlyData: HourlyData[]
   recentProductions: Production[]
   versionData: VersionData[]
+  ranking: RankingEntry[]
   shiftStart?: string
   shiftEnd?: string
 }

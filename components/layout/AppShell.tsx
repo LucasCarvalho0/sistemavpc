@@ -13,12 +13,12 @@ import { Toaster } from '@/components/ui/toaster'
 import AppProviders from './AppProviders'
 
 const NAV = [
-  { path: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/register',   icon: ClipboardList,   label: 'Registrar' },
-  { path: '/ranking',    icon: Trophy,           label: 'Ranking' },
-  { path: '/history',    icon: History,          label: 'Histórico' },
-  { path: '/employees',  icon: Users,            label: 'Funcionários' },
-  { path: '/settings',   icon: Settings,         label: 'Config.' },
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/register', icon: ClipboardList, label: 'Registrar' },
+  { path: '/ranking', icon: Trophy, label: 'Ranking Turno' },
+  { path: '/history', icon: History, label: 'Histórico' },
+  { path: '/employees', icon: Users, label: 'Funcionários' },
+  { path: '/settings', icon: Settings, label: 'Config.' },
 ]
 
 function Sidebar({ onNav }: { onNav?: () => void }) {

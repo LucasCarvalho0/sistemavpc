@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket } from 'lucide-react'
+import Link from 'next/link'
+import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket, Trophy } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import ProductionChart from '@/components/charts/ProductionChart'
 import GoalCelebration from '@/components/ui/GoalCelebration'
 import GoalEditModal from '@/components/ui/GoalEditModal'
 import ShiftEditModal from '@/components/ui/ShiftEditModal'
-import { formatTime, formatDate } from '@/lib/utils'
+import { formatTime, formatDate, cn } from '@/lib/utils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
 export default function DashboardPage() {
@@ -141,19 +142,57 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Production by Version */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {dashboardStats?.versionData?.map((v) => (
-          <div key={v.version} className="card flex items-center justify-between border-l-4 border-l-blue-500 overflow-hidden group">
-            <div className="flex flex-col">
-              <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Versão</span>
-              <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{v.version}</span>
-            </div>
-            <div className="bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-500/20">
-              <span className="stat-num text-2xl text-blue-400">{v.count}</span>
-            </div>
+      {/* Production by Version & Ranking */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Car className="w-4 h-4 text-blue-400" />
+            <h3 className="display font-bold text-lg text-white uppercase tracking-wide">Produção por Versão</h3>
           </div>
-        ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {dashboardStats?.versionData?.map((v) => (
+              <div key={v.version} className="card flex items-center justify-between border-l-4 border-l-blue-500 overflow-hidden group">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Versão</span>
+                  <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{v.version}</span>
+                </div>
+                <div className="bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-500/20">
+                  <span className="stat-num text-2xl text-blue-400">{v.count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card border-yellow-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-yellow-400" />
+              <h3 className="display font-bold text-lg text-white uppercase tracking-wide">Ranking do Turno</h3>
+            </div>
+            <Link href="/ranking" className="text-[10px] font-black uppercase text-slate-500 hover:text-yellow-400 transition-colors tracking-widest">Ver Tudo</Link>
+          </div>
+          <div className="space-y-2">
+            {dashboardStats?.ranking?.length === 0 ? (
+              <p className="text-center py-4 text-slate-500 text-sm italic">Inicie a produção para ver o ranking</p>
+            ) : (
+              dashboardStats?.ranking?.map((r, i) => (
+                <div key={r.employee.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+                  <span className={cn(
+                    "w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold uppercase",
+                    i === 0 ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
+                      i === 1 ? "bg-slate-300/20 text-slate-300 border border-slate-300/30" :
+                        i === 2 ? "bg-orange-400/20 text-orange-400 border border-orange-400/30" : "text-slate-500"
+                  )}>
+                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                  </span>
+                  <span className="flex-1 text-sm text-white font-medium truncate">{r.employee.name}</span>
+                  <span className="stat-num text-lg text-white">{r.count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Chart */}

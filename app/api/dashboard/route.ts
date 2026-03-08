@@ -7,7 +7,14 @@ export async function GET() {
   try {
     const shiftDate = getShiftDate()
 
-    const [totalToday, recentProductions, allToday, config, versionDataRaw] = await Promise.all([
+    const [
+      totalToday,
+      recentProductions,
+      allToday,
+      config,
+      versionDataRaw,
+      rankingRaw
+    ] = await Promise.all([
       prisma.production.count({ where: { shiftDate } }),
       prisma.production.findMany({
         where: { shiftDate },
@@ -26,10 +33,28 @@ export async function GET() {
         where: { shiftDate },
         _count: { _all: true },
         orderBy: { _count: { carVersion: 'desc' } }
+      }),
+      prisma.production.groupBy({
+        by: ['employeeId'],
+        where: { shiftDate },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 5
       })
     ])
 
     const goal = config?.goal ?? DAILY_GOAL
+
+    // Map ranking data
+    const employees = await prisma.employee.findMany({
+      where: { id: { in: rankingRaw.map((g: any) => g.employeeId) } }
+    })
+
+    const ranking = rankingRaw.map((g: any, i: number) => ({
+      position: i + 1,
+      employee: employees.find((e: any) => e.id === g.employeeId)!,
+      count: g._count.id
+    }))
 
     const versionData = versionDataRaw.map((v: any) => ({
       version: v.carVersion as string,
@@ -51,7 +76,7 @@ export async function GET() {
       })
 
     return NextResponse.json({
-      data: { totalToday, goal, hourlyData, recentProductions, versionData },
+      data: { totalToday, goal, hourlyData, recentProductions, versionData, ranking },
     })
   } catch (e: any) {
     console.error('DASHBOARD_API_ERROR:', e)

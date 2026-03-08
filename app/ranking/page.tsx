@@ -83,7 +83,7 @@ export default function RankingPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="display font-extrabold text-2xl md:text-3xl text-white uppercase tracking-tight">Ranking do Dia</h1>
+          <h1 className="display font-extrabold text-2xl md:text-3xl text-white uppercase tracking-tight">Ranking do Turno</h1>
           <p className="text-slate-400 text-sm mt-0.5 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block" />
             Atualização em tempo real
