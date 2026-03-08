@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getShiftDate, getBrazilHour } from '@/lib/shiftUtils'
-import { DAILY_GOAL } from '@/types'
+import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
 export async function GET() {
   try {
@@ -76,7 +76,16 @@ export async function GET() {
       })
 
     return NextResponse.json({
-      data: { totalToday, goal, hourlyData, recentProductions, versionData, ranking },
+      data: {
+        totalToday,
+        goal,
+        hourlyData,
+        recentProductions,
+        versionData,
+        ranking,
+        shiftStart: config?.shiftStart ?? SHIFT_START,
+        shiftEnd: config?.shiftEnd ?? SHIFT_END,
+      },
     })
   } catch (e: any) {
     console.error('DASHBOARD_API_ERROR:', e)

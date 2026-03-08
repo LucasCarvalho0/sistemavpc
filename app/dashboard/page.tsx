@@ -32,8 +32,8 @@ export default function DashboardPage() {
   const goalHit = total >= currentGoal
   const isAboveGoal = total > currentGoal
 
-  const shiftStart = shiftConfig?.shiftStart ?? SHIFT_START
-  const shiftEnd = shiftConfig?.shiftEnd ?? SHIFT_END
+  const shiftStart = dashboardStats?.shiftStart ?? shiftConfig?.shiftStart ?? SHIFT_START
+  const shiftEnd = dashboardStats?.shiftEnd ?? shiftConfig?.shiftEnd ?? SHIFT_END
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 animate-fade-in relative">

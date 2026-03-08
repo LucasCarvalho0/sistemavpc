@@ -147,13 +147,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateGoal: async (newGoal) => {
-    const r = await apiFetch<{ data: { goal: number } }>('/api/config/goal', {
+    const r = await apiFetch<{ data: ShiftConfig }>('/api/config/goal', {
       method: 'POST',
       body: JSON.stringify({ goal: newGoal }),
     })
+    const updatedGoal = r.data.goal
     set(s => ({
-      dashboardStats: s.dashboardStats ? { ...s.dashboardStats, goal: r.data.goal } : null,
-      goalReached: s.dashboardStats ? s.dashboardStats.totalToday >= r.data.goal : false
+      dashboardStats: s.dashboardStats ? { ...s.dashboardStats, goal: updatedGoal } : null,
+      shiftConfig: s.shiftConfig ? { ...s.shiftConfig, goal: updatedGoal } : s.shiftConfig,
+      goalReached: s.dashboardStats ? s.dashboardStats.totalToday >= updatedGoal : false
     }))
   },
 
