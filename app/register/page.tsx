@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ScanLine, Save, CheckCircle, AlertCircle, Loader2, Car } from 'lucide-react'
+import { ScanLine, Save, CheckCircle, AlertCircle, Loader2, Car, Ban } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import VINScanner from '@/components/scanner/VINScanner'
 import { Button } from '@/components/ui/button'
@@ -24,41 +24,112 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
+interface VinConflict {
+  employeeName: string
+  time: string
+}
+
 export default function RegisterPage() {
   const { employees, addProduction } = useAppStore()
   const [showScanner, setShowScanner] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [lastVin, setLastVin] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [vinConflict, setVinConflict] = useState<VinConflict | null>(null)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   const active = employees.filter(e => e.active)
 
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, reset, setError, clearErrors, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
   const vin = watch('vin', '')
   const vinLen = vin?.length ?? 0
 
+  // Verificação em tempo real do VIN — sem I, O, Q, 17 chars
+  const VIN_PATTERN = /^[A-HJ-NPR-Z0-9]{17}$/i
+
+  const checkVin = useCallback(async (rawVin: string) => {
+    const v = rawVin.toUpperCase().trim()
+    if (v.length !== 17 || !VIN_PATTERN.test(v)) {
+      setVinConflict(null)
+      return
+    }
+    setChecking(true)
+    try {
+      const res = await fetch(`/api/productions?vin=${encodeURIComponent(v)}`)
+      const data = await res.json()
+      const productions: any[] = data.data ?? []
+      if (productions.length > 0) {
+        const first = productions[0]
+        const employeeName = first.employee?.name ?? 'Funcionário desconhecido'
+        const time = new Date(first.createdAt).toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        })
+        setVinConflict({ employeeName, time })
+        setError('vin', { type: 'manual', message: `VIN já registrado por ${employeeName} em ${time}` })
+      } else {
+        setVinConflict(null)
+        clearErrors('vin')
+      }
+    } catch {
+      setVinConflict(null)
+    } finally {
+      setChecking(false)
+    }
+  }, [setError, clearErrors])
+
+  // Debounce ao digitar
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setVinConflict(null)
+    if (vinLen === 17) {
+      debounceRef.current = setTimeout(() => checkVin(vin), 400)
+    }
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [vin, vinLen, checkVin])
+
   const onScan = (v: string) => {
     setValue('vin', v, { shouldValidate: true })
     setShowScanner(false)
     toast({ title: '✅ VIN Escaneado', description: v, variant: 'success' })
+    // Verificar imediatamente ao escanear
+    checkVin(v)
   }
 
   const onSubmit = async (data: FormData) => {
+    // Bloquear envio se VIN já registrado
+    if (vinConflict) {
+      toast({
+        title: '🚫 VIN já registrado!',
+        description: `Este chassi já foi processado por ${vinConflict.employeeName}`,
+        variant: 'destructive'
+      })
+      return
+    }
     setSubmitting(true)
     try {
       await addProduction({ vin: data.vin.toUpperCase(), carVersion: data.carVersion, employeeId: data.employeeId })
       playSuccess()
       vibrate([100, 50, 200])
       setLastVin(data.vin.toUpperCase())
+      setVinConflict(null)
       reset()
       toast({ title: '🚗 Produção Registrada!', description: `VIN: ${data.vin.toUpperCase()}`, variant: 'success' })
-    } catch (err) {
-      toast({ title: 'Erro ao salvar', description: (err as Error).message, variant: 'destructive' })
+    } catch (err: any) {
+      const msg = (err as Error).message
+      // Mostrar erro no campo se for conflito de VIN
+      if (msg.toLowerCase().includes('vin') || msg.toLowerCase().includes('registrado')) {
+        setError('vin', { type: 'manual', message: msg })
+      }
+      toast({ title: 'Erro ao salvar', description: msg, variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }
   }
+
+  const vinBlocked = !!vinConflict
+  const vinOk = vinLen === 17 && !errors.vin && !vinConflict && !checking
 
   return (
     <div className="min-h-[calc(100vh-80px)] p-4 md:p-8 flex flex-col items-center justify-center animate-fade-in">
@@ -134,7 +205,7 @@ export default function RegisterPage() {
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between ml-1">
               <Label className="uppercase tracking-widest text-[10px] font-bold text-slate-500">Número do Chassi (VIN)</Label>
-              <span className={`text-[10px] font-bold font-mono tracking-widest ${vinLen === 17 ? 'text-green-400' : 'text-slate-600'}`}>
+              <span className={`text-[10px] font-bold font-mono tracking-widest ${vinOk ? 'text-green-400' : vinBlocked ? 'text-red-400' : 'text-slate-600'}`}>
                 {vinLen} <span className="opacity-40">/</span> 17
               </span>
             </div>
@@ -143,18 +214,50 @@ export default function RegisterPage() {
                 {...register('vin')}
                 placeholder="DIGITE OU ESCANEIE O VIN"
                 maxLength={17}
-                className={`h-16 text-xl md:text-2xl font-mono uppercase tracking-[0.2em] rounded-2xl bg-slate-900/50 border-slate-800 transition-all group-hover:border-slate-700 focus:ring-4 focus:ring-blue-500/10 pr-14 ${errors.vin ? 'border-red-500/50 bg-red-500/[0.02]' : vinLen === 17 && !errors.vin ? 'border-green-500/50 bg-green-500/[0.02]' : ''}`}
+                className={`h-16 text-xl md:text-2xl font-mono uppercase tracking-[0.2em] rounded-2xl bg-slate-900/50 border-slate-800 transition-all group-hover:border-slate-700 focus:ring-4 pr-14
+                  ${vinBlocked
+                    ? 'border-red-500/70 bg-red-500/[0.04] focus:ring-red-500/10'
+                    : vinOk
+                      ? 'border-green-500/50 bg-green-500/[0.02] focus:ring-green-500/10'
+                      : errors.vin
+                        ? 'border-red-500/50 bg-red-500/[0.02] focus:ring-red-500/10'
+                        : 'focus:ring-blue-500/10'
+                  }`}
                 onChange={e => setValue('vin', e.target.value.toUpperCase(), { shouldValidate: true })}
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                {vinLen === 17 && !errors.vin ? (
+                {checking ? (
+                  <Loader2 className="w-6 h-6 text-slate-500 animate-spin" />
+                ) : vinBlocked ? (
+                  <Ban className="w-6 h-6 text-red-500 animate-in zoom-in duration-300" />
+                ) : vinOk ? (
                   <CheckCircle className="w-6 h-6 text-green-400 animate-in zoom-in duration-300" />
                 ) : (
                   <ScanLine className={`w-6 h-6 text-slate-700 transition-colors ${vinLen > 0 ? 'text-blue-500/50' : ''}`} />
                 )}
               </div>
             </div>
-            {errors.vin && <p className="text-red-400 text-[10px] font-bold uppercase flex items-center gap-1.5 ml-1"><AlertCircle className="w-3 h-3" />{errors.vin.message}</p>}
+
+            {/* Erro de VIN duplicado — bem destacado */}
+            {vinBlocked && vinConflict && (
+              <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/40 rounded-2xl animate-in slide-in-from-top-2 duration-300">
+                <Ban className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-400 font-black uppercase text-xs tracking-widest">VIN já registrado!</p>
+                  <p className="text-red-300 text-sm mt-0.5">
+                    Este chassi foi processado por <strong>{vinConflict.employeeName}</strong> em {vinConflict.time}.
+                    Não é possível registrar novamente.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Erro de formato */}
+            {errors.vin && !vinBlocked && (
+              <p className="text-red-400 text-[10px] font-bold uppercase flex items-center gap-1.5 ml-1">
+                <AlertCircle className="w-3 h-3" />{errors.vin.message}
+              </p>
+            )}
 
             {/* Character boxes */}
             <div className="flex justify-between gap-1.5 mt-2">
@@ -162,7 +265,9 @@ export default function RegisterPage() {
                 <div
                   key={i}
                   className={`flex-1 h-10 flex items-center justify-center rounded-lg text-sm font-mono font-bold border transition-all duration-300 ${i < vinLen
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-glow-blue-sm scale-110 z-10'
+                      ? vinBlocked
+                        ? 'bg-red-500/20 border-red-500/40 text-red-300 scale-110 z-10'
+                        : 'bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-glow-blue-sm scale-110 z-10'
                       : 'bg-slate-900 border-slate-800 text-slate-700'
                     }`}
                 >
@@ -187,11 +292,20 @@ export default function RegisterPage() {
             <Button
               type="submit"
               size="xl"
-              className={`h-20 w-full rounded-2xl text-xl uppercase tracking-[0.15em] font-black transition-all hover:scale-[1.01] active:scale-95 ${vinLen === 17 ? 'bg-green-600 hover:bg-green-500 text-white shadow-glow-green' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-              disabled={submitting}
+              disabled={submitting || vinBlocked || checking}
+              className={`h-20 w-full rounded-2xl text-xl uppercase tracking-[0.15em] font-black transition-all hover:scale-[1.01] active:scale-95 ${vinBlocked
+                  ? 'bg-red-900/50 text-red-400 cursor-not-allowed border border-red-500/30'
+                  : vinOk
+                    ? 'bg-green-600 hover:bg-green-500 text-white shadow-glow-green'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                }`}
             >
               {submitting ? (
                 <><Loader2 className="w-6 h-6 mr-3 animate-spin" />Processando...</>
+              ) : vinBlocked ? (
+                <><Ban className="w-6 h-6 mr-3" />VIN Bloqueado</>
+              ) : checking ? (
+                <><Loader2 className="w-6 h-6 mr-3 animate-spin" />Verificando...</>
               ) : (
                 <><Save className="w-6 h-6 mr-3" />Salvar Produção</>
               )}
