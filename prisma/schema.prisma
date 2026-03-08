@@ -34,11 +34,13 @@ model Production {
 }
 
 model ShiftConfig {
-  id        String   @id @default(cuid())
-  shiftDate String   @unique
-  goal      Int      @default(100)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  shiftDate  String   @unique
+  goal       Int      @default(100)
+  shiftStart String? // ex: "16:48", null = usar padrão
+  shiftEnd   String? // ex: "02:00", null = usar padrão
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("shift_configs")
 }

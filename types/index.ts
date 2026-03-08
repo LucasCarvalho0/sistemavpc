@@ -26,6 +26,16 @@ export interface DashboardStats {
   goal: number
   hourlyData: HourlyData[]
   recentProductions: Production[]
+  shiftStart?: string
+  shiftEnd?: string
+}
+
+export interface ShiftConfig {
+  id: string
+  shiftDate: string
+  goal: number
+  shiftStart: string | null
+  shiftEnd: string | null
 }
 
 export interface RankingEntry {

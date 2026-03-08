@@ -6,24 +6,33 @@ import { useAppStore } from '@/stores/appStore'
 import ProductionChart from '@/components/charts/ProductionChart'
 import GoalCelebration from '@/components/ui/GoalCelebration'
 import GoalEditModal from '@/components/ui/GoalEditModal'
+import ShiftEditModal from '@/components/ui/ShiftEditModal'
 import { formatTime, formatDate } from '@/lib/utils'
-import { DAILY_GOAL } from '@/types'
+import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
 export default function DashboardPage() {
-  const { dashboardStats, fetchDashboardStats, goalReached, setGoalReached, updateGoal } = useAppStore()
+  const {
+    dashboardStats, fetchDashboardStats, goalReached, setGoalReached, updateGoal,
+    shiftConfig, fetchShiftConfig, updateShiftConfig,
+  } = useAppStore()
   const [showGoalModal, setShowGoalModal] = useState(false)
+  const [showShiftModal, setShowShiftModal] = useState(false)
 
   useEffect(() => {
     fetchDashboardStats()
+    fetchShiftConfig()
     const id = setInterval(fetchDashboardStats, 30_000)
     return () => clearInterval(id)
-  }, [fetchDashboardStats])
+  }, [fetchDashboardStats, fetchShiftConfig])
 
   const total = dashboardStats?.totalToday ?? 0
   const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
   const progress = Math.min((total / currentGoal) * 100, 100)
   const goalHit = total >= currentGoal
   const isAboveGoal = total > currentGoal
+
+  const shiftStart = shiftConfig?.shiftStart ?? SHIFT_START
+  const shiftEnd = shiftConfig?.shiftEnd ?? SHIFT_END
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 animate-fade-in relative">
@@ -33,6 +42,14 @@ export default function DashboardPage() {
           currentGoal={currentGoal}
           onSave={updateGoal}
           onClose={() => setShowGoalModal(false)}
+        />
+      )}
+      {showShiftModal && (
+        <ShiftEditModal
+          currentStart={shiftStart}
+          currentEnd={shiftEnd}
+          onSave={updateShiftConfig}
+          onClose={() => setShowShiftModal(false)}
         />
       )}
 
@@ -109,15 +126,18 @@ export default function DashboardPage() {
           <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">carros / período</p>
         </div>
 
-        {/* Turno */}
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
-            <Clock className="w-4 h-4 text-purple-400" />
-            <span>Turno</span>
+        {/* Turno — agora editável */}
+        <div className="card group cursor-pointer hover:border-purple-500/50 transition-all" onClick={() => setShowShiftModal(true)}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-slate-400 text-sm">
+              <Clock className="w-4 h-4 text-purple-400" />
+              <span>Turno</span>
+            </div>
+            <Edit2 className="w-3.5 h-3.5 text-slate-600 group-hover:text-purple-400 transition-colors" />
           </div>
-          <p className="stat-num text-xl text-purple-400">16:48</p>
-          <p className="text-xs text-slate-500">até 02:00</p>
-          <p className="text-xs text-slate-600">+extra até 04:00</p>
+          <p className="stat-num text-xl text-purple-400">{shiftStart}</p>
+          <p className="text-xs text-slate-500">até {shiftEnd}</p>
+          <p className="text-[10px] text-slate-600 mt-1 uppercase font-black tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Clique para alterar</p>
         </div>
       </div>
 

@@ -1,11 +1,13 @@
 import { create } from 'zustand'
-import type { Employee, Production, RankingEntry, DashboardStats } from '@/types'
+import type { Employee, Production, RankingEntry, DashboardStats, ShiftConfig } from '@/types'
+import { SHIFT_START, SHIFT_END } from '@/types'
 
 interface AppStore {
   employees: Employee[]
   productions: Production[]
   ranking: RankingEntry[]
   dashboardStats: DashboardStats | null
+  shiftConfig: ShiftConfig | null
   goalReached: boolean
   isLoading: boolean
 
@@ -13,11 +15,13 @@ interface AppStore {
   fetchProductions: (filters?: { employeeId?: string; vin?: string }) => Promise<void>
   fetchRanking: () => Promise<void>
   fetchDashboardStats: () => Promise<void>
+  fetchShiftConfig: () => Promise<void>
   addProduction: (d: { vin: string; carVersion: string; employeeId: string }) => Promise<Production>
   createEmployee: (name: string) => Promise<void>
   updateEmployee: (id: string, data: { name?: string; active?: boolean }) => Promise<void>
   deleteEmployee: (id: string) => Promise<void>
   updateGoal: (newGoal: number) => Promise<void>
+  updateShiftConfig: (shiftStart: string, shiftEnd: string) => Promise<void>
   setGoalReached: (v: boolean) => void
   updateFromWebSocket: (type: string, data: unknown) => void
 }
@@ -36,6 +40,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   productions: [],
   ranking: [],
   dashboardStats: null,
+  shiftConfig: null,
   goalReached: false,
   isLoading: false,
 
@@ -64,14 +69,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (r.data.totalToday >= r.data.goal) set({ goalReached: true })
   },
 
+  fetchShiftConfig: async () => {
+    const r = await apiFetch<{ data: ShiftConfig }>('/api/config/shift')
+    set({ shiftConfig: r.data || null })
+  },
+
   addProduction: async (data) => {
     const r = await apiFetch<{ data: Production }>('/api/productions', {
       method: 'POST',
       body: JSON.stringify(data),
     })
-    get().fetchDashboardStats()
+    const prod = r.data
+
+    // Optimistic update — atualiza o dashboard imediatamente sem esperar nova request
+    set(s => {
+      if (!s.dashboardStats) return s
+      const currentHour = new Date().getHours().toString().padStart(2, '0')
+      const existingHour = s.dashboardStats.hourlyData.find(h => h.hour === currentHour)
+      let hourlyData = s.dashboardStats.hourlyData
+      if (existingHour) {
+        hourlyData = hourlyData.map(h =>
+          h.hour === currentHour
+            ? { ...h, count: h.count + 1, accumulated: h.accumulated + 1 }
+            : h
+        )
+      } else {
+        const lastAcc = hourlyData[hourlyData.length - 1]?.accumulated ?? 0
+        hourlyData = [...hourlyData, { hour: currentHour, count: 1, accumulated: lastAcc + 1 }]
+      }
+      const newTotal = s.dashboardStats.totalToday + 1
+      const newGoalReached = newTotal >= s.dashboardStats.goal
+      return {
+        dashboardStats: {
+          ...s.dashboardStats,
+          totalToday: newTotal,
+          hourlyData,
+          recentProductions: [prod, ...s.dashboardStats.recentProductions.slice(0, 19)],
+        },
+        goalReached: newGoalReached,
+      }
+    })
+
+    // Atualiza ranking em background
     get().fetchRanking()
-    return r.data
+    return prod
   },
 
   createEmployee: async (name) => {
@@ -103,6 +144,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set(s => ({
       dashboardStats: s.dashboardStats ? { ...s.dashboardStats, goal: r.data.goal } : null,
       goalReached: s.dashboardStats ? s.dashboardStats.totalToday >= r.data.goal : false
+    }))
+  },
+
+  updateShiftConfig: async (shiftStart, shiftEnd) => {
+    const r = await apiFetch<{ data: ShiftConfig }>('/api/config/shift', {
+      method: 'POST',
+      body: JSON.stringify({ shiftStart, shiftEnd }),
+    })
+    set(s => ({
+      shiftConfig: r.data,
+      dashboardStats: s.dashboardStats
+        ? { ...s.dashboardStats, shiftStart: r.data.shiftStart ?? SHIFT_START, shiftEnd: r.data.shiftEnd ?? SHIFT_END }
+        : null,
     }))
   },
 
