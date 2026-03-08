@@ -1,64 +1,118 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Zap } from 'lucide-react'
+import { X, Zap, Camera } from 'lucide-react'
 import { playBeep, vibrate } from '@/lib/utils'
 
 interface Props { onScan: (vin: string) => void; onClose: () => void }
 
+/**
+ * Scanner VIN ultra-rápido.
+ * - Usa câmera traseira com foco contínuo
+ * - Escaneia a cada ~100ms para leitura instantânea
+ * - Suporta CODE_128, CODE_39, DATA_MATRIX (formatos comuns de VIN automotivo)
+ * - Aplica constraint de resolução HD para melhor leitura
+ */
 export default function VINScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const scanRef = useRef(true)
   const [status, setStatus] = useState<'starting' | 'scanning' | 'error'>('starting')
   const [errMsg, setErrMsg] = useState('')
 
   useEffect(() => {
     let codeReader: import('@zxing/library').BrowserMultiFormatReader | null = null
+    let stream: MediaStream | null = null
 
     async function start() {
       try {
         const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library')
 
         const hints = new Map()
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]) // VINs are usually Code 128 or 39
+        // Formatos VIN automotivos — CODE_128 (mais comum), CODE_39, ITF, DATA_MATRIX
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.ITF,
+          BarcodeFormat.DATA_MATRIX,
+          BarcodeFormat.QR_CODE,
+        ])
+        hints.set(DecodeHintType.TRY_HARDER, true)
 
-        codeReader = new BrowserMultiFormatReader(hints)
+        // Intervalo de scan mais rápido: 100ms em vez do padrão ~500ms
+        codeReader = new BrowserMultiFormatReader(hints, 100)
 
-        if (scanRef.current) {
-          // continuous scanning
-          codeReader.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
+        // Solicitar câmera traseira com foco automático e resolução HD
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            // @ts-ignore - focusMode é suportado em dispositivos modernos
+            focusMode: { ideal: 'continuous' },
+          },
+        }
+
+        // Iniciar câmera manualmente para ter controle sobre constraints
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+        // Tentar ativar autofocus contínuo e torch (lanterna)
+        const track = stream.getVideoTracks()[0]
+        if (track) {
+          try {
+            // @ts-ignore - advanced constraints
+            const capabilities = track.getCapabilities?.()
+            if (capabilities) {
+              const advancedConstraints: any = {}
+              // @ts-ignore
+              if (capabilities.focusMode?.includes('continuous')) {
+                advancedConstraints.focusMode = 'continuous'
+              }
+              if (Object.keys(advancedConstraints).length > 0) {
+                // @ts-ignore
+                await track.applyConstraints({ advanced: [advancedConstraints] })
+              }
+            }
+          } catch { /* nem todos dispositivos suportam */ }
+        }
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+
+        if (scanRef.current && videoRef.current) {
+          setStatus('scanning')
+
+          // Scan contínuo com callback
+          codeReader.decodeFromVideoElementContinuously(videoRef.current, (result, err) => {
             if (result && scanRef.current) {
-              const clean = result.getText().replace(/[^A-HJ-NPR-Z0-9]/gi, '').toUpperCase()
+              const rawText = result.getText()
+              // Limpar caracteres inválidos de VIN
+              const clean = rawText.replace(/[^A-HJ-NPR-Z0-9]/gi, '').toUpperCase()
+
               if (clean.length >= 17) {
                 scanRef.current = false
                 playBeep()
                 vibrate([100, 50, 100])
                 onScan(clean.slice(0, 17))
+
+                // Parar câmera e reader
                 if (codeReader) codeReader.reset()
+                if (stream) stream.getTracks().forEach(t => t.stop())
               }
-            }
-          }).then(() => {
-            if (scanRef.current) setStatus('scanning')
-          }).catch(err => {
-            // Ignore interruption error which happens on unmount
-            if (err.name === 'NotReadableError' || err.message?.includes('interrupted')) {
-              return
-            }
-            if (scanRef.current) {
-              setStatus('error')
-              setErrMsg(`Erro ao iniciar câmera: ${err.message}`)
             }
           })
         }
 
       } catch (err) {
+        if (!scanRef.current) return // Ignorar erros pós-desmontagem
         setStatus('error')
         const e = err as Error
         setErrMsg(
-          e.name === 'NotAllowedError' ? 'Permissão de câmera negada.' :
-            e.name === 'NotFoundError' ? 'Câmera não encontrada.' :
-              `Erro: ${e.message}`,
+          e.name === 'NotAllowedError' ? 'Permissão de câmera negada. Libere o acesso nas configurações do navegador.' :
+            e.name === 'NotFoundError' ? 'Nenhuma câmera encontrada neste dispositivo.' :
+              e.name === 'NotReadableError' ? 'Câmera em uso por outro aplicativo.' :
+                `Erro: ${e.message}`,
         )
       }
     }
@@ -67,6 +121,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
     return () => {
       scanRef.current = false
       codeReader?.reset()
+      if (stream) stream.getTracks().forEach(t => t.stop())
     }
   }, [onScan])
 
@@ -85,7 +140,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
       {status === 'error' ? (
         <div className="text-center px-6 max-w-sm space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto">
-            <X className="w-8 h-8 text-red-400" />
+            <Camera className="w-8 h-8 text-red-400" />
           </div>
           <p className="text-white font-bold">Erro no Scanner</p>
           <p className="text-slate-400 text-sm">{errMsg}</p>
@@ -94,8 +149,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
       ) : (
         <>
           <div className="scanner-frame">
-            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-            <canvas ref={canvasRef} className="hidden" />
+            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
             {status === 'scanning' && <div className="scanner-line" />}
             <div className="sc-corner sc-tl" />
             <div className="sc-corner sc-tr" />
@@ -108,7 +162,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
               ? <p className="text-slate-400">Iniciando câmera...</p>
               : <>
                 <p className="text-white font-medium">Aponte para o código de barras do VIN</p>
-                <p className="text-slate-500 text-sm mt-1">Detecção automática — menos de 1 segundo</p>
+                <p className="text-green-400 text-sm mt-1 font-bold animate-pulse">⚡ Leitura ultra-rápida ativa</p>
               </>
             }
           </div>
