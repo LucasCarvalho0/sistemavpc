@@ -62,11 +62,16 @@ export async function POST(req: Request) {
     const shiftDate = getShiftDate()
 
     const existing = await prisma.production.findUnique({
-      where: { vin_shiftDate: { vin: cleanVin, shiftDate } },
+      where: { vin: cleanVin },
+      include: { employee: true },
     })
     if (existing) {
+      const registeredAt = existing.createdAt.toLocaleDateString('pt-BR')
+      const registeredBy = existing.employee?.name ?? 'funcionário desconhecido'
       return NextResponse.json(
-        { message: `Erro: O VIN ${cleanVin} já foi registrado hoje às ${existing.createdAt.toLocaleTimeString('pt-BR')}.` },
+        {
+          message: `VIN já registrado! O chassi ${cleanVin} foi cadastrado por ${registeredBy} em ${registeredAt}. Não é possível registrá-lo novamente.`,
+        },
         { status: 409 }
       )
     }

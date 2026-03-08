@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 
-// Thin provider that boots global data and the WebSocket listener
+// Thin provider that boots global data and the SSE listener
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   const { fetchEmployees, fetchDashboardStats, fetchRanking, updateFromWebSocket } = useAppStore()
 
@@ -14,36 +14,35 @@ export default function AppProviders({ children }: { children: React.ReactNode }
     fetchRanking()
   }, [fetchEmployees, fetchDashboardStats, fetchRanking])
 
-  // WebSocket real-time updates
+  // SSE real-time updates (substitui WebSocket)
   useEffect(() => {
-    const WS_URL =
-      process.env.NEXT_PUBLIC_WS_URL ??
-      (typeof window !== 'undefined'
-        ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
-        : 'ws://localhost:3000/ws')
-
-    let ws: WebSocket
+    let es: EventSource
     let retryTimer: ReturnType<typeof setTimeout>
 
     function connect() {
-      ws = new WebSocket(WS_URL)
+      es = new EventSource('/api/events')
 
-      ws.onmessage = (e) => {
+      es.onmessage = (e) => {
         try {
           const { type, data } = JSON.parse(e.data)
-          updateFromWebSocket(type, data)
-        } catch { /* ignore */ }
+          if (type !== 'connected') {
+            updateFromWebSocket(type, data)
+          }
+        } catch { /* ignora mensagens malformadas */ }
       }
 
-      ws.onclose = () => {
-        retryTimer = setTimeout(connect, 3000)
+      // EventSource reconecta automaticamente, mas caso seja erro fatal:
+      es.onerror = () => {
+        es.close()
+        retryTimer = setTimeout(connect, 5000)
       }
     }
 
     connect()
+
     return () => {
       clearTimeout(retryTimer)
-      ws?.close()
+      es?.close()
     }
   }, [updateFromWebSocket])
 

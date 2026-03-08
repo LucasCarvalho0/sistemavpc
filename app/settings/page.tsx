@@ -21,15 +21,20 @@ export default function SettingsPage() {
   }, [fetchDashboardStats, fetchShiftConfig])
 
   useEffect(() => {
-    const url = typeof window !== 'undefined'
-      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
-      : ''
-    if (!url) return
-    const ws = new WebSocket(url)
-    ws.onopen = () => setWsStatus('connected')
-    ws.onerror = () => setWsStatus('disconnected')
-    ws.onclose = () => setWsStatus('disconnected')
-    return () => ws.close()
+    if (typeof window === 'undefined') return
+    setWsStatus('connecting')
+    const es = new EventSource('/api/events')
+
+    es.onmessage = (e) => {
+      try {
+        const { type } = JSON.parse(e.data)
+        if (type === 'connected') setWsStatus('connected')
+      } catch { /* ignora */ }
+    }
+
+    es.onerror = () => setWsStatus('disconnected')
+
+    return () => es.close()
   }, [])
 
   const currentGoal = dashboardStats?.goal ?? DAILY_GOAL

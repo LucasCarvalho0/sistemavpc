@@ -1,41 +1,73 @@
 /**
- * wsManager.ts
+ * sseManager.ts  (anteriormente wsManager.ts)
  *
- * In serverless environments (Netlify/Vercel), WebSocket servers cannot be
- * initialised — broadcast() becomes a no-op so the rest of the app still works.
+ * Gerenciador de Server-Sent Events (SSE).
+ * Substitui WebSocket — funciona em Next.js dev, produção e ambientes serverless.
+ *
+ * API pública mantida idêntica para não quebrar as rotas existentes:
+ *   broadcast(type, data)  — envia evento para todos os clientes conectados
  */
 
-let wss: import('ws').WebSocketServer | null = null
-
-export async function initWebSocket(server: import('http').Server) {
-  if (wss) return wss
-  try {
-    const { WebSocketServer } = await import('ws')
-    wss = new WebSocketServer({ server, path: '/ws' })
-
-    wss.on('connection', (ws) => {
-      const { WebSocket } = require('ws')
-      console.log('[WS] client connected, total:', wss!.clients.size)
-      ws.send(JSON.stringify({ type: 'connected' }))
-      ws.on('close', () => console.log('[WS] client disconnected'))
-      ws.on('error', (e: Error) => console.error('[WS] error', e.message))
-    })
-
-    console.log('[WS] WebSocket server ready on /ws')
-  } catch {
-    console.warn('[WS] ws module not available — running in serverless mode')
-  }
-  return wss
+type SSEClient = {
+  id: string
+  controller: ReadableStreamDefaultController
 }
 
-export function broadcast(type: string, data: unknown) {
-  if (!wss) return // no-op in serverless
-  const msg = JSON.stringify({ type, data })
-  let n = 0
-  wss.clients.forEach((c) => {
-    // dynamic require to avoid top-level import issues
-    const { WebSocket } = require('ws')
-    if (c.readyState === WebSocket.OPEN) { c.send(msg); n++ }
+// Map global de clientes SSE conectados
+// Em produção serverless cada instância de função tem seu próprio Map —
+// mas para este projeto (single-server local + Netlify single-instance) funciona perfeitamente.
+const clients = new Map<string, SSEClient>()
+
+let clientCounter = 0
+
+/**
+ * Registra um novo cliente SSE e retorna o ReadableStream para a rota /api/events.
+ * O cleanup automático acontece quando o cliente desconecta.
+ */
+export function createSSEStream(signal: AbortSignal): ReadableStream {
+  const id = `sse-${++clientCounter}-${Date.now()}`
+
+  const stream = new ReadableStream({
+    start(controller) {
+      // Registra o cliente
+      clients.set(id, { id, controller })
+      console.log(`[SSE] client connected: ${id}, total: ${clients.size}`)
+
+      // Envia evento de boas-vindas
+      const welcome = `data: ${JSON.stringify({ type: 'connected' })}\n\n`
+      controller.enqueue(new TextEncoder().encode(welcome))
+
+      // Remove o cliente quando a conexão for encerrada
+      signal.addEventListener('abort', () => {
+        clients.delete(id)
+        try { controller.close() } catch { /* já fechado */ }
+        console.log(`[SSE] client disconnected: ${id}, total: ${clients.size}`)
+      })
+    },
   })
-  if (n > 0) console.log(`[WS] broadcast [${type}] → ${n} clients`)
+
+  return stream
+}
+
+/**
+ * Envia um evento SSE para todos os clientes conectados.
+ * Mantém a mesma assinatura do broadcast() anterior do WebSocket.
+ */
+export function broadcast(type: string, data: unknown) {
+  if (clients.size === 0) return
+
+  const msg = new TextEncoder().encode(`data: ${JSON.stringify({ type, data })}\n\n`)
+  let sent = 0
+
+  clients.forEach((client, id) => {
+    try {
+      client.controller.enqueue(msg)
+      sent++
+    } catch {
+      // Stream fechada inesperadamente — limpa o cliente
+      clients.delete(id)
+    }
+  })
+
+  if (sent > 0) console.log(`[SSE] broadcast [${type}] → ${sent} clients`)
 }

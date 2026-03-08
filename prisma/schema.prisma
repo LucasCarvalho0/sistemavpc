@@ -27,7 +27,7 @@ model Production {
   createdAt  DateTime @default(now())
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  @@unique([vin, shiftDate])
+  @@unique([vin])
   @@index([shiftDate])
   @@index([employeeId])
   @@map("productions")
