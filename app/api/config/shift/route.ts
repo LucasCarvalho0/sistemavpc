@@ -3,9 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { getShiftDate } from '@/lib/shiftUtils'
 import { SHIFT_START, SHIFT_END } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
     try {
         const shiftDate = getShiftDate()
+        console.log(`[SHIFT_GET] shiftDate: ${shiftDate}`)
         let config = await prisma.shiftConfig.findUnique({ where: { shiftDate } })
 
         if (!config) {

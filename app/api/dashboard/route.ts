@@ -3,9 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { getShiftDate, getBrazilHour } from '@/lib/shiftUtils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const shiftDate = getShiftDate()
+    console.log(`[DASHBOARD_GET] shiftDate: ${shiftDate}`)
 
     const [
       totalToday,
@@ -44,6 +47,7 @@ export async function GET() {
     ])
 
     const goal = config?.goal ?? DAILY_GOAL
+    console.log(`[DASHBOARD_GET] goal: ${goal} (fromDB: ${!!config})`)
 
     // Map ranking data
     const employees = await prisma.employee.findMany({

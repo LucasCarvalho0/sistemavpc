@@ -27,7 +27,11 @@ interface AppStore {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...init })
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    ...init
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Erro desconhecido' }))
     throw new Error(err.message ?? `HTTP ${res.status}`)

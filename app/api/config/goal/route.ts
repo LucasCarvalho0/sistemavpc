@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getShiftDate } from '@/lib/shiftUtils'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
     try {
         const shiftDate = getShiftDate()
+        console.log(`[GOAL_GET] shiftDate: ${shiftDate}`)
         let config = await prisma.shiftConfig.findUnique({ where: { shiftDate } })
 
         if (!config) {
@@ -28,6 +31,7 @@ export async function POST(req: Request) {
         }
 
         const shiftDate = getShiftDate()
+        console.log(`[GOAL_POST] shiftDate: ${shiftDate}, newGoal: ${goal}`)
         const config = await prisma.shiftConfig.upsert({
             where: { shiftDate },
             update: { goal },
