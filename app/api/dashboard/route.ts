@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getShiftDate } from '@/lib/shiftUtils'
+import { getShiftDate, getBrazilHour } from '@/lib/shiftUtils'
 import { DAILY_GOAL } from '@/types'
 
 export async function GET() {
@@ -28,7 +28,7 @@ export async function GET() {
     // Build hourly chart data
     const map = new Map<string, number>()
     allToday.forEach((p: { createdAt: Date }) => {
-      const h = p.createdAt.getHours().toString().padStart(2, '0')
+      const h = getBrazilHour(p.createdAt).toString().padStart(2, '0')
       map.set(h, (map.get(h) ?? 0) + 1)
     })
     let acc = 0
