@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Zap, Camera, Lightbulb, LightbulbOff } from 'lucide-react'
+import { X, Zap, Camera, Lightbulb, LightbulbOff, AlertCircle } from 'lucide-react'
 import { playBeep, vibrate, cn } from '@/lib/utils'
 
 interface Props { onScan: (vin: string) => void; onClose: () => void }
@@ -18,77 +18,65 @@ export default function VINScanner({ onScan, onClose }: Props) {
   const [errMsg, setErrMsg] = useState('')
   const [torch, setTorch] = useState(false)
   const [hasTorch, setHasTorch] = useState(false)
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
   const trackRef = useRef<MediaStreamTrack | null>(null)
 
+  const addLog = (msg: string) => {
+    console.log(`[SCANNER] ${msg}`)
+    setDebugLogs(prev => [...prev.slice(-3), msg])
+  }
+
   useEffect(() => {
-    let codeReader: import('@zxing/library').BrowserMultiFormatReader | null = null
+    let codeReader: any = null
     let stream: MediaStream | null = null
 
     async function start() {
+      addLog('Iniciando...')
       try {
         const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library')
+        addLog('ZXing carregado')
 
         const hints = new Map()
         // Expandir formatos para abranger todas as etiquetas industriais possíveis
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.CODE_128,
-          BarcodeFormat.CODE_39,
-          BarcodeFormat.CODE_93,
-          BarcodeFormat.CODABAR,
-          BarcodeFormat.EAN_13,
-          BarcodeFormat.EAN_8,
-          BarcodeFormat.ITF,
-          BarcodeFormat.UPC_A,
-          BarcodeFormat.DATA_MATRIX,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+          BarcodeFormat.EAN_13, BarcodeFormat.ITF, BarcodeFormat.UPC_A
         ])
         hints.set(DecodeHintType.TRY_HARDER, true)
 
-        codeReader = new BrowserMultiFormatReader(hints, 100)
+        codeReader = new BrowserMultiFormatReader(hints, 150)
 
         const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            // @ts-ignore
-            focusMode: { ideal: 'continuous' },
-          },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
         }
 
+        addLog('Pedindo câmera...')
         stream = await navigator.mediaDevices.getUserMedia(constraints)
+        addLog('Câmera OK')
+
         const track = stream.getVideoTracks()[0]
         trackRef.current = track
 
         if (track) {
-          try {
-            // @ts-ignore
-            const caps = track.getCapabilities?.()
-            // @ts-ignore
-            setHasTorch(!!caps?.torch)
+          const caps: any = track.getCapabilities?.() || {}
+          setHasTorch(!!caps.torch)
+          addLog(`Torch: ${!!caps.torch ? 'Sim' : 'Não'}`)
 
-            if (caps) {
-              const advanced: any = {}
-              // @ts-ignore
-              if (caps.focusMode?.includes('continuous')) advanced.focusMode = 'continuous'
-              // @ts-ignore
-              if (caps.whiteBalanceMode?.includes('continuous')) advanced.whiteBalanceMode = 'continuous'
-
-              if (Object.keys(advanced).length > 0) {
-                await track.applyConstraints({ advanced: [advanced] })
-              }
-            }
-          } catch (e) { console.warn('Constraints error:', e) }
+          if (caps.focusMode?.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as any).catch(() => { })
+          }
         }
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
+          addLog('Vídeo tocando')
         }
 
         if (scanRef.current && videoRef.current) {
           setStatus('scanning')
 
-          codeReader.decodeFromVideoElementContinuously(videoRef.current, (result) => {
+          codeReader.decodeFromVideoElementContinuously(videoRef.current, (result: any) => {
             if (result && scanRef.current) {
               const text = result.getText().toUpperCase()
 
@@ -99,11 +87,11 @@ export default function VINScanner({ onScan, onClose }: Props) {
                */
               const vinMatch = text.match(/[A-HJ-NPR-Z0-9]{17}/)
 
-              if (vinMatch && scanRef.current) {
+              if (vinMatch) {
+                addLog('VIN Detectado!')
                 const cleanVin = vinMatch[0]
                 scanRef.current = false
-                playBeep()
-                vibrate([100, 50, 100])
+                playBeep(); vibrate([100, 50, 100]);
                 onScan(cleanVin)
 
                 if (codeReader) codeReader.reset()
@@ -112,11 +100,10 @@ export default function VINScanner({ onScan, onClose }: Props) {
             }
           })
         }
-      } catch (err) {
-        if (!scanRef.current) return
+      } catch (err: any) {
+        addLog(`Erro: ${err.name}`)
+        setErrMsg(err.message || 'Falha ao iniciar')
         setStatus('error')
-        const e = err as Error
-        setErrMsg(e.name === 'NotAllowedError' ? 'Sem permissão de câmera.' : `Falha: ${e.message}`)
       }
     }
 
@@ -129,98 +116,70 @@ export default function VINScanner({ onScan, onClose }: Props) {
   }, [onScan])
 
   const toggleTorch = async () => {
-    const newTorch = !torch
-    setTorch(newTorch)
+    const next = !torch
+    setTorch(next)
     try {
       if (trackRef.current) {
-        // @ts-ignore
-        await trackRef.current.applyConstraints({ advanced: [{ torch: newTorch }] })
+        await (trackRef.current as any).applyConstraints({ advanced: [{ torch: next }] }).catch(() => { })
       }
     } catch (e) { console.error('Torch failed:', e) }
   }
 
   return (
     <div className="scanner-overlay backdrop-blur-md">
+      {/* Debug Logs */}
+      <div className="fixed top-2 left-2 z-50 pointer-events-none opacity-50">
+        {debugLogs.map((log, i) => (
+          <div key={i} className="text-[10px] text-white bg-black/50 px-2 py-0.5 rounded mb-1">{log}</div>
+        ))}
+      </div>
+
       <div className="w-full max-w-sm px-4 mb-6 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-green-500/20 rounded-lg">
-            <Zap className="w-5 h-5 text-green-400" />
-          </div>
-          <span className="text-white font-bold text-lg display uppercase tracking-wide">Scanner Industrial</span>
+          <Zap className="w-5 h-5 text-green-400" />
+          <span className="text-white font-bold text-lg display uppercase tracking-wide">Scanner VIN</span>
         </div>
         <div className="flex items-center gap-2">
           {hasTorch && (
             <button
               onClick={toggleTorch}
               className={cn(
-                "p-2.5 rounded-xl border transition-all active:scale-90",
-                torch ? "bg-yellow-400 text-black border-yellow-300 shadow-glow-yellow" : "bg-slate-800 text-slate-400 border-slate-700"
+                "p-2.5 rounded-xl border",
+                torch ? "bg-yellow-400 text-black border-yellow-300" : "bg-slate-800 text-slate-400 border-slate-700"
               )}
             >
               {torch ? <Lightbulb className="w-5 h-5" /> : <LightbulbOff className="w-5 h-5" />}
             </button>
           )}
-          <button onClick={onClose} className="p-2.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-slate-700 active:scale-90 transition-all">
+          <button onClick={onClose} className="p-2.5 bg-slate-800 text-slate-400 rounded-xl border border-slate-700">
             <X className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {status === 'error' ? (
-        <div className="text-center px-6 max-w-sm space-y-4 animate-in zoom-in-95">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto">
-            <Camera className="w-8 h-8 text-red-400" />
-          </div>
-          <p className="text-white font-bold">Erro no Scanner</p>
-          <p className="text-slate-400 text-sm leading-relaxed">{errMsg}</p>
-          <button onClick={onClose} className="bg-white text-slate-900 font-bold px-8 py-3 rounded-2xl w-full active:scale-95 transition-all">Fechar</button>
+        <div className="text-center px-6 max-w-sm space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <p className="text-white font-bold">Falha no Scanner</p>
+          <p className="text-slate-400 text-sm">{errMsg}</p>
+          <button onClick={onClose} className="bg-white text-black font-bold px-8 py-3 rounded-2xl w-full">Voltar</button>
         </div>
       ) : (
-        <div className="flex flex-col items-center animate-in fade-in duration-500">
-          <div className="scanner-frame shadow-2xl">
+        <div className="flex flex-col items-center">
+          <div className="scanner-frame relative border-2 border-green-500/50 rounded-2xl overflow-hidden" style={{ width: '320px', height: '180px' }}>
             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
-            {status === 'scanning' && <div className="scanner-line" />}
-            <div className="sc-corner sc-tl border-green-400" />
-            <div className="sc-corner sc-tr border-green-400" />
-            <div className="sc-corner sc-bl border-green-400" />
-            <div className="sc-corner sc-br border-green-400" />
-
-            {/* Guide area for barcode */}
-            <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-1 border-t border-dashed border-white/30" />
+            <div className="absolute inset-0 border-[20px] border-black/40" />
+            <div className="absolute inset-x-10 top-1/2 -translate-y-1/2 h-0.5 bg-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.5)] animate-pulse" />
           </div>
-
-          <div className="mt-8 text-center px-10">
-            {status === 'starting' ? (
-              <div className="flex items-center gap-3 text-slate-400">
-                <div className="w-4 h-4 border-2 border-slate-600 border-t-green-400 rounded-full animate-spin" />
-                <p>Otimizando câmera...</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-white font-bold text-lg">Centralize o Código de Barras</p>
-                <p className="text-slate-400 text-sm">O VIN será detectado automaticamente de etiquetas industriais.</p>
-                <p className="text-green-400 text-[10px] font-black uppercase tracking-[0.2em] pt-4 animate-pulse">
-                  Detectando AI/VIN Pattern Active
-                </p>
-              </div>
-            )}
+          <div className="mt-8 text-center px-10 space-y-2">
+            <p className="text-white font-bold">Aponte para o Código de Barras</p>
+            <p className="text-slate-400 text-sm italic">O VIN de 17 dígitos será extraído automaticamente.</p>
           </div>
-
-          <button
-            onClick={onClose}
-            className="mt-12 px-10 py-3 text-slate-500 hover:text-white border border-slate-800 hover:bg-white/5 rounded-2xl transition-all font-bold uppercase text-[10px] tracking-widest"
-          >
+          <button onClick={onClose} className="mt-10 px-8 py-2 text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest border border-slate-800 rounded-xl transition-all">
             Sair do Scanner
           </button>
         </div>
       )}
-
-      <style jsx global>{`
-        .sc-corner { border-width: 4px !important; width: 30px !important; height: 30px !important; }
-        .scanner-frame { width: 340px !important; height: 180px !important; }
-        .shadow-glow-yellow { box-shadow: 0 0 15px rgba(250, 204, 21, 0.4); }
-      `}</style>
     </div>
   )
 }
-
