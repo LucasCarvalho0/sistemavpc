@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/form'
 import { formatDate, formatTime } from '@/lib/utils'
 import type { Production } from '@/types'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function HistoryPage() {
   const { employees, fetchEmployees } = useAppStore()
@@ -44,10 +46,71 @@ export default function HistoryPage() {
     a.click()
   }
 
-  const monthlyReport = async () => {
+  const exportPDF = (rows: Production[], filename: string, title: string) => {
+    const doc = new jsPDF()
+    const tableRows = rows.map(p => [
+      p.vin,
+      p.employee?.name ?? '',
+      p.carVersion,
+      formatDate(p.createdAt),
+      formatTime(p.createdAt)
+    ])
+
+    // Header do Documento
+    doc.setFillColor(30, 41, 59)
+    doc.rect(0, 0, 210, 40, 'F')
+
+    doc.setFontSize(22)
+    doc.setTextColor(255, 255, 255)
+    doc.text('AutoTrack VPC', 14, 20)
+
+    doc.setFontSize(12)
+    doc.setTextColor(200, 200, 200)
+    doc.text(title, 14, 30)
+
+    doc.setFontSize(10)
+    doc.setTextColor(150, 150, 150)
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 145, 30)
+
+    autoTable(doc, {
+      startY: 45,
+      head: [['VIN', 'Funcionário', 'Versão', 'Data', 'Hora']],
+      body: tableRows,
+      theme: 'grid',
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+        overflow: 'linebreak',
+        halign: 'left',
+      },
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      columnStyles: {
+        0: { cellWidth: 45, fontStyle: 'bold' }, // VIN
+        1: { cellWidth: 'auto' }, // Funcionário
+        2: { cellWidth: 'auto' }, // Versão
+        3: { cellWidth: 25, halign: 'center' }, // Data
+        4: { cellWidth: 20, halign: 'center' }, // Hora
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14, right: 14 }
+    })
+
+    doc.save(filename)
+  }
+
+  const monthlyReport = async (format: 'csv' | 'pdf') => {
     const [y, m] = reportMonth.split('-')
     const r = await fetch(`/api/reports/monthly?year=${y}&month=${m}`).then(r => r.json())
-    exportCSV(r.data, `relatorio-${reportMonth}.csv`)
+    if (format === 'csv') {
+      exportCSV(r.data, `relatorio-${reportMonth}.csv`)
+    } else {
+      exportPDF(r.data, `relatorio-${reportMonth}.pdf`, `Relatório de Produção - ${reportMonth}`)
+    }
   }
 
   return (
@@ -57,9 +120,14 @@ export default function HistoryPage() {
           <h1 className="display font-extrabold text-2xl md:text-3xl text-white uppercase tracking-tight">Histórico de Produção</h1>
           <p className="text-slate-400 text-sm mt-0.5">{productions?.length || 0} registros</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.csv`)} className="flex items-center gap-2">
-          <Download className="w-4 h-4" /><span className="hidden sm:inline">CSV</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.csv`)} className="flex items-center gap-2">
+            <Download className="w-4 h-4" /><span className="hidden sm:inline">CSV</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => exportPDF(productions, `producao-${new Date().toISOString().split('T')[0]}.pdf`, 'Histórico de Produção')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
+            <FileText className="w-4 h-4" /><span className="hidden sm:inline">PDF</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -93,9 +161,14 @@ export default function HistoryPage() {
             <Label>Mês</Label>
             <Input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} min="2026-03" className="w-44" />
           </div>
-          <Button variant="outline" onClick={monthlyReport} className="flex items-center gap-2 self-end">
-            <Download className="w-4 h-4" />Baixar CSV
-          </Button>
+          <div className="flex gap-2 self-end">
+            <Button variant="outline" onClick={() => monthlyReport('csv')} className="flex items-center gap-2">
+              <Download className="w-4 h-4" />Baixar CSV
+            </Button>
+            <Button variant="outline" onClick={() => monthlyReport('pdf')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
+              <FileText className="w-4 h-4" />Baixar PDF
+            </Button>
+          </div>
         </div>
       </div>
 
