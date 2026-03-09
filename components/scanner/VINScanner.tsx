@@ -74,20 +74,20 @@ export default function VINScanner({ onScan, onClose }: Props) {
     function normalizeVin(text: string) {
       if (!text) return null
 
-      // Limpeza Sugerida V13: Remove I,O,Q diretamente no regex de limpeza
       const clean = text
         .toUpperCase()
         .replace(/[^A-HJ-NPR-Z0-9]/g, "")
 
       if (clean.length < 17) return null
 
-      // Padrão Nissan/Industrial: últimos 17 caracteres
-      const vin = clean.slice(-17)
-
-      // Garantia final ISO 3779
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
-        return vin
+      // FIX V14: Tenta encontrar um VIN válido de 17 chars em qualquer posição
+      for (let i = 0; i <= clean.length - 17; i++) {
+        const candidate = clean.slice(i, i + 17)
+        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate)) {
+          return candidate
+        }
       }
+
       return null
     }
 
@@ -114,10 +114,14 @@ export default function VINScanner({ onScan, onClose }: Props) {
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.CODE_128,
         BarcodeFormat.CODE_39,
-        BarcodeFormat.DATA_MATRIX
+        BarcodeFormat.DATA_MATRIX,
+        // FIX V14: Adiciona PDF_417 para cobrir mais formatos industriais
+        BarcodeFormat.PDF_417,
       ])
       hints.set(DecodeHintType.TRY_HARDER, true)
-      hints.set(DecodeHintType.PURE_BARCODE, false) // Leitura em ambiente real
+      hints.set(DecodeHintType.PURE_BARCODE, false)
+      // FIX V14: Permite leitura em múltiplas orientações (barcode vertical)
+      hints.set(DecodeHintType.ALSO_INVERTED, true)
 
       const reader = new BrowserMultiFormatReader(hints, 150)
       readerRef.current = reader
@@ -193,31 +197,33 @@ export default function VINScanner({ onScan, onClose }: Props) {
           canvas.width = 640
           canvas.height = originalHeight * scale
 
-          // FIX V13: Recorte Central (Crop) para focar apenas na área do VIN
-          const cropHeight = canvas.height * 0.35
-          const cropY = canvas.height * 0.325
+          // FIX V14: Crop maior (50% da altura) para não cortar o VIN longo em etiquetas verticais
+          const cropStart = 0.25
+          const cropSize = 0.50
 
           ctx.drawImage(
             videoRef.current,
             0,
-            (originalHeight * 0.325), // Coordenada Y de origem proporcional
+            originalHeight * cropStart,
             originalWidth,
-            (originalHeight * 0.35), // Altura de origem proporcional
+            originalHeight * cropSize,
             0,
             0,
             canvas.width,
-            cropHeight
+            canvas.height * cropSize
           )
 
           const image = canvas.toDataURL("image/png")
 
-          // FIX V13: Whitelist para ignorar caracteres lixo e focar no padrão VIN
+          // FIX V14: Whitelist estrita e PSM 6 para blocos de texto uniformes
           const result = await Tesseract.recognize(
             image,
             "eng",
             {
               // @ts-ignore
-              tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
+              tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
+              // @ts-ignore
+              tessedit_pageseg_mode: "6"
             }
           )
 
