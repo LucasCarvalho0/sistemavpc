@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Zap, Lightbulb, LightbulbOff, AlertCircle } from 'lucide-react'
+import { X, Zap, Lightbulb, LightbulbOff, AlertCircle, Scan } from 'lucide-react'
 import { playBeep, vibrate, cn } from '@/lib/utils'
 
 interface Props { onScan: (vin: string) => void; onClose: () => void }
 
 /**
- * SCANNER VIN PROFISSIONAL (V4 - INDUSTRIAL)
- * - Mira de leitura (Aiming Reticle) para alinhamento preciso
- * - ZXing Engine configurado para alta sensibilidade (Code128 especial)
- * - Captura instantânea com Regex industrial /[A-HJ-NPR-Z0-9]{17}/
- * - Foco contínuo e resolução 1080p para barras finas
+ * SCANNER VIN V5 - INDUSTRIAL PRO
+ * - Otimizado para CODE 128 (VIN longo e fino)
+ * - Character Repair: Converte automaticamente O->0, I->1, Q->0
+ * - Mira Proporcionada: Área de leitura estendida horizontalmente
+ * - Resolução 720p: Equilíbrio ideal entre processamento e detalhe
  */
 export default function VINScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -18,6 +18,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
   const [errMsg, setErrMsg] = useState('')
   const [torch, setTorch] = useState(false)
   const [hasTorch, setHasTorch] = useState(false)
+  const [lastRead, setLastRead] = useState('')
   const trackRef = useRef<MediaStreamTrack | null>(null)
 
   useEffect(() => {
@@ -29,29 +30,27 @@ export default function VINScanner({ onScan, onClose }: Props) {
         const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library')
 
         const hints = new Map()
-        // Formatos industriais críticos (VIN é Code128)
+        // Prioridade total para Code 128 (VIN industrial)
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [
           BarcodeFormat.CODE_128,
           BarcodeFormat.CODE_39,
+          BarcodeFormat.CODE_93,
           BarcodeFormat.DATA_MATRIX,
-          BarcodeFormat.QR_CODE
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.ITF
         ])
         hints.set(DecodeHintType.TRY_HARDER, true)
-        hints.set(DecodeHintType.ASSUME_GS1, true)
 
-        // Motor ultra-sônico (100ms cycle)
         codeReader = new BrowserMultiFormatReader(hints, 100)
 
-        // Configurações HD para barras finas (conforme sugerido)
+        // Resolução 720p é o "ponto doce" para evitar lag de processamento em 100ms
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             // @ts-ignore
-            aspectRatio: 1.777777778,
-            // @ts-ignore
-            frameRate: { min: 20, ideal: 30 }
+            focusMode: 'continuous'
           }
         }
 
@@ -62,7 +61,6 @@ export default function VINScanner({ onScan, onClose }: Props) {
         if (track) {
           const caps: any = track.getCapabilities?.() || {}
           setHasTorch(!!caps.torch)
-
           const advanced: any = {}
           // @ts-ignore
           if (caps.focusMode?.includes('continuous')) advanced.focusMode = 'continuous'
@@ -81,23 +79,32 @@ export default function VINScanner({ onScan, onClose }: Props) {
 
           codeReader.decodeFromVideoElementContinuously(videoRef.current, (result: any) => {
             if (result && scanRef.current) {
-              const text = result.getText().toUpperCase()
+              const raw = result.getText().toUpperCase().trim()
+              setLastRead(raw)
 
-              // REGEX PROFISSIONAL: Detecta qualquer sequência de 17 caracteres VIN válida
-              const vinMatch = text.match(/[A-HJ-NPR-Z0-9]{17}/)
+              // 1. Regex Permissiva: Captura qualquer sequência de 17 ou 18 chars (A-Z, 0-9)
+              const vinMatch = raw.match(/[A-Z0-9]{17,18}/)
 
               if (vinMatch) {
-                const finalVin = vinMatch[0]
-                scanRef.current = false // Travar leitura
+                let candidate = vinMatch[0].slice(0, 17) // Pega os primeiros 17
 
-                // Feedback Instantâneo
-                playBeep()
-                vibrate([50, 30, 50])
+                // 2. Character Repair: Converte erros comuns de sensores
+                // ISO VIN não tem I, O, Q. Scanners às vezes confundem.
+                const repaired = candidate
+                  .replace(/O/g, '0') // Oscar -> Zero
+                  .replace(/I/g, '1') // India -> One
+                  .replace(/Q/g, '0') // Quebec -> Zero
 
-                // Sair e enviar
-                onScan(finalVin)
-                if (codeReader) codeReader.reset()
-                if (stream) stream.getTracks().forEach(t => t.stop())
+                // 3. Validação Final
+                if (/^[A-HJ-NPR-Z0-9]{17}$/.test(repaired)) {
+                  scanRef.current = false
+                  playBeep()
+                  vibrate([100, 50, 100])
+                  onScan(repaired)
+
+                  if (codeReader) codeReader.reset()
+                  if (stream) stream.getTracks().forEach(t => t.stop())
+                }
               }
             }
           })
@@ -105,7 +112,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
       } catch (err: any) {
         if (!scanRef.current) return
         setStatus('error')
-        setErrMsg(err.name === 'NotAllowedError' ? 'Permissão de câmera negada.' : err.message)
+        setErrMsg(err.message || 'Falha ao iniciar sensor')
       }
     }
 
@@ -126,107 +133,98 @@ export default function VINScanner({ onScan, onClose }: Props) {
   }
 
   return (
-    <div className="scanner-overlay fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md flex items-center justify-between mb-8">
+    <div className="scanner-overlay fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden">
+      {/* Header Industrial */}
+      <div className="absolute top-0 inset-x-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent z-10">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500/20 rounded-xl border border-blue-500/30">
-            <Zap className="w-5 h-5 text-blue-400" />
+          <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+            <Scan className="w-6 h-6 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-white font-black text-xs uppercase tracking-[0.2em]">Scanner V4</h2>
-            <p className="text-slate-500 text-[10px] font-bold uppercase">Nissan Pattern Active</p>
+            <h2 className="text-white font-black text-sm uppercase tracking-widest">Scanner V5</h2>
+            <p className="text-blue-400/60 text-[10px] uppercase font-black tracking-tighter">Precision Logic Active</p>
           </div>
         </div>
 
         <div className="flex gap-2">
           {hasTorch && (
-            <button
-              onClick={toggleTorch}
-              className={cn(
-                "p-3 rounded-2xl border transition-all active:scale-90",
-                torch ? "bg-yellow-400 text-black border-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.4)]" : "bg-slate-900 text-slate-500 border-slate-800"
-              )}
-            >
-              {torch ? <Lightbulb className="w-5 h-5" /> : <LightbulbOff className="w-5 h-5" />}
+            <button onClick={toggleTorch} className={cn("p-3.5 rounded-2xl border transition-all active:scale-90", torch ? "bg-yellow-400 text-black border-yellow-300" : "bg-white/5 text-white/40 border-white/10")}>
+              {torch ? <Lightbulb className="w-6 h-6" /> : <LightbulbOff className="w-6 h-6" />}
             </button>
           )}
-          <button onClick={onClose} className="p-3 bg-slate-900 text-slate-500 rounded-2xl border border-slate-800 active:scale-90 transition-all">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-3.5 bg-white/5 text-white/40 rounded-2xl border border-white/10 active:scale-90 transition-all">
+            <X className="w-6 h-6" />
           </button>
         </div>
       </div>
 
       {status === 'error' ? (
-        <div className="text-center space-y-6 max-w-xs">
-          <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-3xl flex items-center justify-center mx-auto">
-            <AlertCircle className="w-10 h-10 text-red-500" />
-          </div>
-          <div className="space-y-2">
-            <p className="text-white font-black text-xl uppercase tracking-wider">Falha Crucial</p>
-            <p className="text-slate-500 text-sm leading-relaxed">{errMsg}</p>
-          </div>
-          <button onClick={onClose} className="bg-white text-black font-black py-4 rounded-2xl w-full active:scale-95 transition-all shadow-xl uppercase text-xs tracking-widest">Digitar Manualmente</button>
+        <div className="text-center space-y-6 px-10">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto" />
+          <p className="text-white font-black text-xl uppercase italic tracking-tighter">{errMsg}</p>
+          <button onClick={onClose} className="bg-white text-black font-black py-4 px-10 rounded-2xl uppercase text-[10px] tracking-[0.2em]">Voltar</button>
         </div>
       ) : (
-        <div className="flex flex-col items-center w-full">
-          {/* Mira Industrial */}
-          <div className="relative w-full max-w-sm aspect-[3/2] rounded-[2.5rem] border-2 border-white/5 overflow-hidden shadow-2xl">
+        <div className="relative w-full h-full flex flex-col items-center justify-center">
+          {/* Visor de Câmera */}
+          <div className="absolute inset-0 z-0">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
+          </div>
 
-            {/* Overlay de Sombra */}
-            <div className="absolute inset-0 bg-black/40" />
+          {/* Overlay de Máscara (Mira mais larga para Code 128) */}
+          <div className="absolute inset-0 z-1 flex items-center justify-center">
+            {/* O "buraco" da mira */}
+            <div className="w-[90%] h-[180px] rounded-3xl border-2 border-blue-500/40 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] relative overflow-hidden">
+              {/* Linha de Scan Dinâmica */}
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)] animate-scan-line" />
 
-            {/* Área de Foco (Abertura na Sombra) */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-[85%] h-[40%] bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] rounded-2xl border border-white/20" />
-            </div>
+              {/* Cantos de Mira */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 border-white/80 rounded-tl-xl" />
+                <div className="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 border-white/80 rounded-tr-xl" />
+                <div className="absolute bottom-4 left-4 w-8 h-8 border-b-4 border-l-4 border-white/80 rounded-bl-xl" />
+                <div className="absolute bottom-4 right-4 w-8 h-8 border-b-4 border-r-4 border-white/80 rounded-br-xl" />
+              </div>
 
-            {/* Retículo (Aiming Reticle) */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-[85%] h-[40%] relative">
-                {/* Cantos da Mira */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-2xl" />
-
-                {/* Linha de Verificação Central */}
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.8)] animate-pulse" />
-
-                {/* Indicadores de Centro */}
-                <div className="absolute left-1/2 top-0 -translate-x-1/2 w-4 h-[2px] bg-blue-500/50" />
-                <div className="absolute left-1/2 bottom-0 -translate-x-1/2 w-4 h-[2px] bg-blue-500/50" />
+              {/* Status de Leitura no Visor */}
+              <div className="absolute bottom-4 inset-x-0 text-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[9px] text-white/60 font-black uppercase tracking-widest">Aguardando Barcode...</span>
+                </div>
               </div>
             </div>
+          </div>
 
-            {status === 'starting' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
-                <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-                <p className="text-blue-400 font-black text-[10px] uppercase tracking-widest animate-pulse">Iniciando Lógica Industrial...</p>
+          {/* Footer Informativo */}
+          <div className="absolute bottom-20 inset-x-0 px-10 text-center z-10 pointer-events-none">
+            <p className="text-white font-black text-2xl uppercase italic tracking-tighter mb-2">Centralize o Código</p>
+            <p className="text-white/40 text-xs font-medium">Capture as barras horizontais. O sistema irá converter o VIN automaticamente.</p>
+
+            {/* Debug (Apenas para ajudar se falhar) */}
+            {lastRead && (
+              <div className="mt-8 p-3 bg-black/40 border border-white/10 rounded-xl backdrop-blur-md animate-in fade-in zoom-in duration-300">
+                <p className="text-[8px] text-white/30 uppercase font-bold tracking-widest mb-1">Detectado</p>
+                <p className="text-xs text-blue-400 font-mono font-bold break-all lowercase italic tracking-wider">{lastRead}</p>
               </div>
             )}
           </div>
 
-          <div className="mt-12 text-center space-y-4 px-8">
-            <h3 className="text-white font-black text-2xl uppercase tracking-tighter italic">Alinhe o Código</h3>
-            <p className="text-slate-400 text-xs font-medium leading-relaxed">Posicione as barras finas dentro da mira azul. O VIN será capturado instantaneamente.</p>
-
-            <div className="flex items-center justify-center gap-3 pt-4">
-              <div className="px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
-                <span className="text-[10px] text-green-500 font-black uppercase tracking-widest">Auto-Focus Continuous</span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="mt-16 px-12 py-4 bg-slate-900 text-slate-500 hover:text-white border border-slate-800 rounded-3xl transition-all font-black uppercase text-[10px] tracking-widest active:scale-95"
-          >
-            Digitar Manualmente
+          <button onClick={onClose} className="absolute bottom-8 px-10 py-3 bg-white/10 text-white/50 border border-white/10 rounded-2xl uppercase text-[9px] font-black tracking-[0.2em] backdrop-blur-md hover:text-white transition-all active:scale-95 z-10">
+            Sair do modo scanner
           </button>
         </div>
       )}
+
+      <style jsx global>{`
+        @keyframes scan {
+          0%, 100% { top: 10%; }
+          50% { top: 90%; }
+        }
+        .animate-scan-line {
+          animation: scan 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   )
 }
