@@ -94,7 +94,12 @@ export default function VINScanner({ onScan, onClose }: Props) {
     function handleResult(text: string) {
       if (!scanRef.current) return
 
-      const vin = normalizeVin(text)
+      let vin = text
+
+      if (text.length !== 17) {
+        vin = normalizeVin(text) || ""
+      }
+
       if (!vin) return
 
       scanRef.current = false
@@ -228,7 +233,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
         } finally {
           setIsAiProcessing(false)
         }
-      }, 3000)
+      }, 1200)
     }
 
     function stopScanner() {
