@@ -120,10 +120,8 @@ export default function VINScanner({ onScan, onClose }: Props) {
       ])
       hints.set(DecodeHintType.TRY_HARDER, true)
       hints.set(DecodeHintType.PURE_BARCODE, false)
-      // FIX V14: Permite leitura em múltiplas orientações (barcode vertical)
-      hints.set(DecodeHintType.ALSO_INVERTED, true)
 
-      const reader = new BrowserMultiFormatReader(hints, 150)
+      const reader = new BrowserMultiFormatReader(hints, 100) // FIX V15: intervalo de 100ms
       readerRef.current = reader
 
       reader.decodeFromVideoElementContinuously(
@@ -151,15 +149,15 @@ export default function VINScanner({ onScan, onClose }: Props) {
           }
         },
         locator: {
-          patchSize: "medium", // Ajustado para melhor detecção de barras finas
-          halfSample: true
+          patchSize: "large", // FIX V15: "large" para barcodes verticais/longos
+          halfSample: false   // FIX V15: desativar halfSample para mais precisão
         },
         decoder: {
           readers: ["code_128_reader", "code_39_reader"],
           multiple: false
         },
         locate: true,
-        frequency: 10
+        frequency: 15 // FIX V15: mais tentativas por segundo
       }, function (err: any) {
         if (!err && scanRef.current) {
           // Oculta eventuais buffers visíveis se criados
@@ -185,53 +183,63 @@ export default function VINScanner({ onScan, onClose }: Props) {
 
         try {
           setIsAiProcessing(true)
+          const video = videoRef.current
           const canvas = canvasRef.current
           const ctx = canvas.getContext("2d")
           if (!ctx) return
 
-          // FIX V13: Downscale para 640px para acelerar o OCR 3x
-          const originalWidth = videoRef.current.videoWidth
-          const originalHeight = videoRef.current.videoHeight
-          const scale = 640 / originalWidth
+          const vw = video.videoWidth
+          const vh = video.videoHeight
 
-          canvas.width = 640
-          canvas.height = originalHeight * scale
+          // FIX V15: Tenta leitura em 3 rotações: 0°, 90°, 270°
+          const rotations = [0, 90, 270]
 
-          // FIX V14: Crop maior (50% da altura) para não cortar o VIN longo em etiquetas verticais
-          const cropStart = 0.25
-          const cropSize = 0.50
+          for (const angle of rotations) {
+            if (!scanRef.current) break
 
-          ctx.drawImage(
-            videoRef.current,
-            0,
-            originalHeight * cropStart,
-            originalWidth,
-            originalHeight * cropSize,
-            0,
-            0,
-            canvas.width,
-            canvas.height * cropSize
-          )
+            if (angle === 0) {
+              canvas.width = 640
+              canvas.height = Math.round(vh * (640 / vw))
+              ctx.drawImage(video, 0, 0, vw, vh, 0, 0, canvas.width, canvas.height)
+            } else {
+              // Rotaciona o frame do vídeo no canvas
+              canvas.width = Math.round(vh * (640 / vw))
+              canvas.height = 640
+              ctx.save()
+              ctx.translate(canvas.width / 2, canvas.height / 2)
+              ctx.rotate((angle * Math.PI) / 180)
 
-          const image = canvas.toDataURL("image/png")
-
-          // FIX V14: Whitelist estrita e PSM 6 para blocos de texto uniformes
-          const result = await Tesseract.recognize(
-            image,
-            "eng",
-            {
-              // @ts-ignore
-              tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
-              // @ts-ignore
-              tessedit_pageseg_mode: "6"
+              // Ajusta o drawImage para a rotação
+              const drawW = 640
+              const drawH = Math.round(vh * (640 / vw))
+              ctx.drawImage(
+                video,
+                -Math.round(drawW / 2),
+                -Math.round(drawH / 2),
+                drawW,
+                drawH
+              )
+              ctx.restore()
             }
-          )
 
-          if (scanRef.current) {
+            const image = canvas.toDataURL("image/png")
+
+            const result = await Tesseract.recognize(
+              image,
+              "eng",
+              {
+                // @ts-ignore
+                tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
+                // @ts-ignore
+                tessedit_pageseg_mode: "6"
+              }
+            )
+
             const text = result.data.text
             const vin = normalizeVin(text)
-            if (vin) {
+            if (vin && scanRef.current) {
               handleResult(vin)
+              return // Sucesso! Para de tentar outras rotações
             }
           }
         } catch (e) {
@@ -239,7 +247,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
         } finally {
           setIsAiProcessing(false)
         }
-      }, 1200)
+      }, 1500) // FIX V15: Ajustado para 1.5s devido às múltiplas rotações
     }
 
     function stopScanner() {
