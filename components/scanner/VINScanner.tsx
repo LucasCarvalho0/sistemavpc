@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from "react"
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/browser"
+// Usamos @zxing/library para o leitor pois a API de 'continuously' é mais estável e completa
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library"
 import { X, Zap, Lightbulb, LightbulbOff, AlertCircle, Scan, Terminal } from "lucide-react"
 import { playBeep, vibrate, cn } from "@/lib/utils"
 
@@ -12,7 +13,7 @@ interface Props {
 
 /**
  * SCANNER VIN V7 INDUSTRIAL (PRO PATTERN)
- * - Motor: @zxing/browser (Ultra-estável)
+ * - Motor: @zxing/library (Configuração de Alta Precisão)
  * - Otimização: Code 128 e Code 39 (Padrão Automotivo)
  * - Mira: Industrial Vision com Retículo e Laser Scan
  * - Inteligência: Normalização ISO 3779 (O->0, I->1, Q->0)
@@ -39,8 +40,8 @@ export default function VINScanner({ onScan, onClose }: Props) {
       ])
       hints.set(DecodeHintType.TRY_HARDER, true)
 
-      // Inicialização do leitor (50ms cache)
-      const reader = new BrowserMultiFormatReader(hints, 50)
+      // Inicialização do leitor
+      const reader = new BrowserMultiFormatReader(hints)
       readerRef.current = reader
 
       const constraints: MediaStreamConstraints = {
@@ -58,12 +59,12 @@ export default function VINScanner({ onScan, onClose }: Props) {
         streamRef.current = stream
 
         const track = stream.getVideoTracks()[0]
-        const caps: any = track.getCapabilities?.()
-        if (caps?.torch) setHasTorch(true)
+        const caps: any = track.getCapabilities?.() || {}
+        if (caps.torch) setHasTorch(true)
 
         // Forçar foco contínuo se disponível
         const advanced: any = {}
-        if (caps?.focusMode?.includes('continuous')) advanced.focusMode = 'continuous'
+        if (caps.focusMode?.includes('continuous')) advanced.focusMode = 'continuous'
         if (Object.keys(advanced).length > 0) {
           await track.applyConstraints({ advanced: [advanced] } as any).catch(() => { })
         }
@@ -75,9 +76,10 @@ export default function VINScanner({ onScan, onClose }: Props) {
 
         setStatus("scanning")
 
+        // decodeFromVideoElementContinuously está disponível no @zxing/library
         reader.decodeFromVideoElementContinuously(
           videoRef.current!,
-          (result) => {
+          (result, err) => {
             if (result) {
               const text = result.getText().toUpperCase()
               setLastScan(text)
@@ -236,7 +238,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
           </div>
 
           {/* Texto de Ajuda e Debug */}
-          <div className="absolute bottom-24 inset-x-0 text-center px-10 space-y-4 z-20">
+          <div className="absolute bottom-24 inset-x-0 text-center px-10 space-y-4 z-20 pointer-events-none">
             <h3 className="text-white font-black text-2xl uppercase italic tracking-tighter">Posicionamento Industrial</h3>
             <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest leading-relaxed max-w-[280px] mx-auto">
               Mantenha o código a 15-20cm de distância. O sistema extrai o VIN de 17 dígitos automaticamente.
@@ -257,7 +259,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
                   {debugMode && (
                     <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
                       <span className="text-[9px] text-slate-500 uppercase font-bold">Status Sensor</span>
-                      <span className="text-[10px] text-blue-400 font-bold">@zxing/browser v7</span>
+                      <span className="text-[10px] text-blue-400 font-bold">@zxing/library v7</span>
                     </div>
                   )}
                 </div>
