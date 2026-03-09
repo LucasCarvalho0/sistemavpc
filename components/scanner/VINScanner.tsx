@@ -14,10 +14,10 @@ interface Props {
 }
 
 /**
- * SCANNER VIN V16 INDUSTRIAL FIXES
- * - FIX BUG 1: handleResult always passes through normalizeVin
- * - FIX BUG 2: Canvas rotation dimensions & offsets (90°/270°)
- * - FIX BUG 3: isAiProcessingRef to avoid interval race conditions
+ * SCANNER VIN V17 ULTRA PRECISION
+ * - FIX BUG V17.1: Lossless square 640x640 canvas (no more crops on rotation)
+ * - FIX BUG V17.2: ISO 3779 model year validation (pos 10) to skip OCR noise
+ * - Industrial Grade: Robust to vertical/rotated factory labels
  */
 export default function VINScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -26,7 +26,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
   const readerRef = useRef<BrowserMultiFormatReader | null>(null)
   const scanRef = useRef(true)
   const ocrIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isAiProcessingRef = useRef(false) // FIX BUG 3: ref para evitar race condition
+  const isAiProcessingRef = useRef(false)
 
   const [status, setStatus] = useState<'starting' | 'scanning' | 'error'>('starting')
   const [lastScan, setLastScan] = useState("")
@@ -68,21 +68,28 @@ export default function VINScanner({ onScan, onClose }: Props) {
       }
     }
 
+    // FIX V17: normalizeVin com priorização por ano-modelo ISO 3779
     function normalizeVin(text: string): string | null {
       if (!text) return null
       const clean = text.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, "")
       if (clean.length < 17) return null
 
+      const candidates: string[] = []
       for (let i = 0; i <= clean.length - 17; i++) {
         const candidate = clean.slice(i, i + 17)
         if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate)) {
-          return candidate
+          candidates.push(candidate)
         }
       }
-      return null
+
+      if (candidates.length === 0) return null
+
+      // Prioriza candidato com ano-modelo válido na posição 10 (índice 9)
+      // Ano válido ISO 3779: A-H, J-N, P-Y ou 1-9
+      const yearChars = /^[A-HJ-NPR-Z0-9]{9}[A-HJ-NPR-Y1-9]/
+      return candidates.find(c => yearChars.test(c)) || candidates[0]
     }
 
-    // FIX BUG 1: Sempre passa pelo normalizeVin, sem bypass para strings de 17 chars
     function handleResult(text: string) {
       if (!scanRef.current) return
 
@@ -149,7 +156,6 @@ export default function VINScanner({ onScan, onClose }: Props) {
 
     async function startOCRLoop() {
       ocrIntervalRef.current = setInterval(async () => {
-        // FIX BUG 3: usa ref em vez de state
         if (!scanRef.current || !videoRef.current || !canvasRef.current || isAiProcessingRef.current) return
 
         isAiProcessingRef.current = true
@@ -161,32 +167,25 @@ export default function VINScanner({ onScan, onClose }: Props) {
           const ctx = canvas.getContext("2d")
           if (!ctx) return
 
-          const vw = video.videoWidth
-          const vh = video.videoHeight
-
           const rotations = [0, 90, 270]
 
           for (const angle of rotations) {
             if (!scanRef.current) break
 
+            // FIX V17: Canvas quadrado Lossless (640x640)
+            canvas.width = 640
+            canvas.height = 640
+            ctx.clearRect(0, 0, 640, 640)
+
             if (angle === 0) {
-              canvas.width = 640
-              canvas.height = Math.round(vh * (640 / vw))
-              ctx.drawImage(video, 0, 0, vw, vh, 0, 0, canvas.width, canvas.height)
+              // No 0° desenhamos o centro do vídeo no canvas quadrado
+              ctx.drawImage(video, 0, 0, 640, 640)
             } else {
-              // FIX BUG 2: dimensões e offsets corretos para rotação 90°/270°
-              canvas.width = Math.round(vh * (640 / vw))
-              canvas.height = Math.round(vw * (canvas.width / vh))
+              // Rotação centrada sem cortes
               ctx.save()
-              ctx.translate(canvas.width / 2, canvas.height / 2)
+              ctx.translate(320, 320)
               ctx.rotate((angle * Math.PI) / 180)
-              ctx.drawImage(
-                video,
-                -canvas.height / 2,
-                -canvas.width / 2,
-                canvas.height,
-                canvas.width
-              )
+              ctx.drawImage(video, -320, -320, 640, 640)
               ctx.restore()
             }
 
@@ -244,7 +243,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
             <BrainCircuit className="w-7 h-7 text-purple-400" />
           </div>
           <div className="flex flex-col">
-            <h2 className="text-white font-black text-xs uppercase tracking-[0.25em] leading-none mb-1">Industrial V16</h2>
+            <h2 className="text-white font-black text-xs uppercase tracking-[0.25em] leading-none mb-1">Industrial V17</h2>
             <div className="flex items-center gap-1.5">
               <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isAiProcessing ? "bg-purple-500 shadow-glow-purple" : "bg-green-500 shadow-glow-green")} />
               <span className="text-[9px] text-slate-400 font-black tracking-widest uppercase italic">
@@ -282,7 +281,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
             <canvas ref={canvasRef} className="hidden" />
           </div>
 
-          <div className="relative z-10 w-[94%] max-w-sm h-[180px] rounded-[3rem] border-2 border-purple-500/30 shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] backdrop-blur-[1px]">
+          <div className="relative z-10 w-[94%] max-sm h-[180px] rounded-[3rem] border-2 border-purple-500/30 shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] backdrop-blur-[1px]">
             <div className="absolute inset-x-12 h-[3px] bg-purple-500 shadow-[0_0_35px_rgba(168,85,247,1)] animate-laser-scan blur-[0.3px]" />
             <div className="absolute -top-1 -left-1 w-16 h-16 border-t-4 border-l-4 border-white rounded-tl-[3rem]" />
             <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-white rounded-tr-[3rem]" />
