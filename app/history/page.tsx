@@ -17,6 +17,14 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [filterEmp, setFilterEmp] = useState('all')
   const [filterVin, setFilterVin] = useState('')
+  const [rangeStart, setRangeStart] = useState(() => {
+    const d = new Date()
+    return d.toISOString().split('T')[0]
+  })
+  const [rangeEnd, setRangeEnd] = useState(() => {
+    const d = new Date()
+    return d.toISOString().split('T')[0]
+  })
   const [reportMonth, setReportMonth] = useState(() => {
     const n = new Date()
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
@@ -72,6 +80,10 @@ export default function HistoryPage() {
     doc.setTextColor(150, 150, 150)
     doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 145, 30)
 
+    doc.setFontSize(12)
+    doc.setTextColor(255, 255, 255)
+    doc.text(`Quantidade Total: ${rows.length} carros`, 14, 38)
+
     autoTable(doc, {
       startY: 45,
       head: [['VIN', 'Funcionário', 'Versão', 'Data', 'Hora']],
@@ -103,9 +115,19 @@ export default function HistoryPage() {
     doc.save(filename)
   }
 
+  const rangeReport = async (format: 'csv' | 'pdf') => {
+    const r = await fetch(`/api/reports/range?start=${rangeStart}&end=${rangeEnd}`).then(res => res.json())
+    if (format === 'csv') {
+      exportCSV(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.csv`)
+    } else {
+      const title = `Relatório de Produção: ${formatDate(rangeStart)} a ${formatDate(rangeEnd)}`
+      exportPDF(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.pdf`, title)
+    }
+  }
+
   const monthlyReport = async (format: 'csv' | 'pdf') => {
     const [y, m] = reportMonth.split('-')
-    const r = await fetch(`/api/reports/monthly?year=${y}&month=${m}`).then(r => r.json())
+    const r = await fetch(`/api/reports/monthly?year=${y}&month=${m}`).then(res => res.json())
     if (format === 'csv') {
       exportCSV(r.data, `relatorio-${reportMonth}.csv`)
     } else {
@@ -150,18 +172,45 @@ export default function HistoryPage() {
         </div>
       </div>
 
+      {/* Range Report */}
+      <div className="card border-blue-500/20">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-blue-400" />
+          <span className="text-sm font-bold text-white uppercase tracking-wider">Baixar por Período</span>
+        </div>
+        <div className="flex gap-4 items-end flex-wrap">
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Início</Label>
+            <Input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="w-44 bg-secondary/50" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Fim</Label>
+            <Input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="w-44 bg-secondary/50" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => rangeReport('csv')} className="flex items-center gap-2 border-slate-700 hover:bg-slate-800">
+              <Download className="w-4 h-4" />CSV
+            </Button>
+            <Button variant="outline" onClick={() => rangeReport('pdf')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
+              <FileText className="w-4 h-4" />PDF
+            </Button>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-3 uppercase font-bold tracking-tighter">Útil para exportar informações dos dias 10, 11 e outros intervalos específicos.</p>
+      </div>
+
       {/* Monthly report */}
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
-          <FileText className="w-4 h-4 text-blue-400" />
+          <FileText className="w-4 h-4 text-slate-400" />
           <span className="text-sm font-medium text-white">Relatório Mensal</span>
         </div>
-        <div className="flex gap-3 items-center flex-wrap">
-          <div className="space-y-1">
-            <Label>Mês</Label>
+        <div className="flex gap-3 items-end flex-wrap text-slate-300">
+          <div className="space-y-1.5">
+            <Label className="text-[10px] uppercase font-black tracking-widest opacity-50">Mês</Label>
             <Input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} min="2026-03" className="w-44" />
           </div>
-          <div className="flex gap-2 self-end">
+          <div className="flex gap-2">
             <Button variant="outline" onClick={() => monthlyReport('csv')} className="flex items-center gap-2">
               <Download className="w-4 h-4" />Baixar CSV
             </Button>
