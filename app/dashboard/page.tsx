@@ -18,6 +18,8 @@ export default function DashboardPage() {
   } = useAppStore()
   const [showGoalModal, setShowGoalModal] = useState(false)
   const [showShiftModal, setShowShiftModal] = useState(false)
+  const [celebrationCount, setCelebrationCount] = useState(0)
+  const [lastCelebrationTime, setLastCelebrationTime] = useState(0)
 
   useEffect(() => {
     fetchDashboardStats()
@@ -25,6 +27,26 @@ export default function DashboardPage() {
     const id = setInterval(fetchDashboardStats, 30_000)
     return () => clearInterval(id)
   }, [fetchDashboardStats, fetchShiftConfig])
+
+  // Lógica de repetição da celebração: 3 vezes a cada 20 minutos
+  useEffect(() => {
+    const total = dashboardStats?.totalToday ?? 0
+    const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
+    const goalHit = total >= currentGoal
+
+    if (goalHit && celebrationCount < 3) {
+      const now = Date.now()
+      const twentyMinutes = 20 * 60 * 1000
+
+      if (lastCelebrationTime === 0 || (now - lastCelebrationTime >= twentyMinutes)) {
+        if (!goalReached) {
+          setGoalReached(true)
+          setCelebrationCount(prev => prev + 1)
+          setLastCelebrationTime(now)
+        }
+      }
+    }
+  }, [dashboardStats?.totalToday, dashboardStats?.goal, celebrationCount, lastCelebrationTime, goalReached, setGoalReached])
 
   const total = dashboardStats?.totalToday ?? 0
   const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
@@ -37,7 +59,12 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 animate-fade-in relative">
-      {goalReached && <GoalCelebration onClose={() => setGoalReached(false)} />}
+      {goalReached && (
+        <GoalCelebration
+          currentGoal={currentGoal}
+          onClose={() => setGoalReached(false)}
+        />
+      )}
       {showGoalModal && (
         <GoalEditModal
           currentGoal={currentGoal}

@@ -6,10 +6,11 @@ import { Trophy, Star, PartyPopper } from 'lucide-react'
 import { playGoalSound, vibrate } from '@/lib/utils'
 
 interface Props {
+    currentGoal: number
     onClose: () => void
 }
 
-export default function GoalCelebration({ onClose }: Props) {
+export default function GoalCelebration({ currentGoal, onClose }: Props) {
     const [visible, setVisible] = useState(false)
 
     useEffect(() => {
@@ -54,7 +55,7 @@ export default function GoalCelebration({ onClose }: Props) {
                         🎉 META <br /> <span className="text-green-400">BATIDA!</span>
                     </h2>
                     <p className="text-emerald-100/70 text-lg font-medium mb-8">
-                        Parabéns equipe! <br /> O objetivo de 100 carros foi alcançado.
+                        Parabéns equipe! <br /> O objetivo de {currentGoal} carros foi alcançado.
                     </p>
 
                     <button
