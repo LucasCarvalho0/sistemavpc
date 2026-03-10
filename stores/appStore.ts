@@ -156,11 +156,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       body: JSON.stringify({ goal: newGoal }),
     })
     const updatedGoal = r.data.goal
-    set(s => ({
-      dashboardStats: s.dashboardStats ? { ...s.dashboardStats, goal: updatedGoal } : null,
-      shiftConfig: s.shiftConfig ? { ...s.shiftConfig, goal: updatedGoal } : s.shiftConfig,
-      goalReached: s.dashboardStats ? s.dashboardStats.totalToday >= updatedGoal : false
-    }))
+    set(s => {
+      const currentTotal = s.dashboardStats?.totalToday ?? 0
+      const newGoalReached = currentTotal >= updatedGoal
+
+      return {
+        dashboardStats: s.dashboardStats ? { ...s.dashboardStats, goal: updatedGoal } : null,
+        shiftConfig: s.shiftConfig ? { ...s.shiftConfig, goal: updatedGoal } : s.shiftConfig,
+        goalReached: newGoalReached
+      }
+    })
   },
 
   updateShiftConfig: async (shiftStart, shiftEnd) => {

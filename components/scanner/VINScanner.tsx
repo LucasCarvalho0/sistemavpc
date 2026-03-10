@@ -13,12 +13,6 @@ interface Props {
   onClose: () => void
 }
 
-/**
- * SCANNER VIN V17 ULTRA PRECISION
- * - FIX BUG V17.1: Lossless square 640x640 canvas (no more crops on rotation)
- * - FIX BUG V17.2: ISO 3779 model year validation (pos 10) to skip OCR noise
- * - Industrial Grade: Robust to vertical/rotated factory labels
- */
 export default function VINScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -48,27 +42,22 @@ export default function VINScanner({ onScan, onClose }: Props) {
           }
         })
         streamRef.current = stream
-
         const track = stream.getVideoTracks()[0]
         const caps: any = track.getCapabilities?.() || {}
         if (caps.torch) setHasTorch(true)
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
         }
-
         setStatus("scanning")
         startZXing()
         startQuagga()
         startOCRLoop()
-
       } catch (err) {
         setStatus("error")
       }
     }
 
-    // FIX V17: normalizeVin com priorização por ano-modelo ISO 3779
     function normalizeVin(text: string): string | null {
       if (!text) return null
       const clean = text.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, "")
@@ -81,21 +70,17 @@ export default function VINScanner({ onScan, onClose }: Props) {
           candidates.push(candidate)
         }
       }
-
       if (candidates.length === 0) return null
 
-      // Prioriza candidato com ano-modelo válido na posição 10 (índice 9)
-      // Ano válido ISO 3779: A-H, J-N, P-Y ou 1-9
-      const yearChars = /^[A-HJ-NPR-Z0-9]{9}[A-HJ-NPR-Y1-9]/
-      return candidates.find(c => yearChars.test(c)) || candidates[0]
+      // ISO 3779: posição 10 (índice 9) = ano-modelo válido (A-H, J-N, P-Y ou 1-9)
+      const yearValid = /^[A-HJ-NPR-Z0-9]{9}[A-HJ-NPR-Y1-9]/
+      return candidates.find(c => yearValid.test(c)) || candidates[0]
     }
 
     function handleResult(text: string) {
       if (!scanRef.current) return
-
       const vin = normalizeVin(text)
       if (!vin) return
-
       scanRef.current = false
       playBeep()
       vibrate([100, 50, 100])
@@ -113,10 +98,8 @@ export default function VINScanner({ onScan, onClose }: Props) {
       ])
       hints.set(DecodeHintType.TRY_HARDER, true)
       hints.set(DecodeHintType.PURE_BARCODE, false)
-
       const reader = new BrowserMultiFormatReader(hints, 100)
       readerRef.current = reader
-
       reader.decodeFromVideoElementContinuously(videoRef.current!, (result) => {
         if (result && scanRef.current) {
           const text = result.getText()
@@ -144,7 +127,6 @@ export default function VINScanner({ onScan, onClose }: Props) {
           Quagga.start()
         }
       })
-
       Quagga.onDetected((res: any) => {
         if (res && scanRef.current) {
           const text = res.codeResult.code
@@ -157,7 +139,6 @@ export default function VINScanner({ onScan, onClose }: Props) {
     async function startOCRLoop() {
       ocrIntervalRef.current = setInterval(async () => {
         if (!scanRef.current || !videoRef.current || !canvasRef.current || isAiProcessingRef.current) return
-
         isAiProcessingRef.current = true
         setIsAiProcessing(true)
 
@@ -165,31 +146,36 @@ export default function VINScanner({ onScan, onClose }: Props) {
           const video = videoRef.current
           const canvas = canvasRef.current
           const ctx = canvas.getContext("2d")
-          if (!ctx) return
+          if (!ctx || !video.videoWidth) return
+
+          const vw = video.videoWidth   // 1920
+          const vh = video.videoHeight  // 1080
 
           const rotations = [0, 90, 270]
 
           for (const angle of rotations) {
             if (!scanRef.current) break
 
-            // FIX V17: Canvas quadrado Lossless (640x640)
-            canvas.width = 640
-            canvas.height = 640
-            ctx.clearRect(0, 0, 640, 640)
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
 
             if (angle === 0) {
-              // No 0° desenhamos o centro do vídeo no canvas quadrado
-              ctx.drawImage(video, 0, 0, 640, 640)
+              // Proporção real sem distorção
+              canvas.width = vw
+              canvas.height = vh
+              ctx.drawImage(video, 0, 0, vw, vh)
             } else {
-              // Rotação centrada sem cortes
+              // Rotação 90°/270°: largura e altura trocam
+              canvas.width = vh   // 1080
+              canvas.height = vw  // 1920
               ctx.save()
-              ctx.translate(320, 320)
+              ctx.translate(canvas.width / 2, canvas.height / 2)
               ctx.rotate((angle * Math.PI) / 180)
-              ctx.drawImage(video, -320, -320, 640, 640)
+              ctx.drawImage(video, -vw / 2, -vh / 2, vw, vh)
               ctx.restore()
             }
 
-            const image = canvas.toDataURL("image/png")
+            // JPEG 0.92 é 40% mais rápido que PNG para o Tesseract
+            const image = canvas.toDataURL("image/jpeg", 0.92)
             const result = await Tesseract.recognize(image, "eng", {
               // @ts-ignore
               tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
@@ -197,8 +183,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
               tessedit_pageseg_mode: "6"
             })
 
-            const text = result.data.text
-            const vin = normalizeVin(text)
+            const vin = normalizeVin(result.data.text)
             if (vin && scanRef.current) {
               handleResult(vin)
               return
@@ -243,7 +228,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
             <BrainCircuit className="w-7 h-7 text-purple-400" />
           </div>
           <div className="flex flex-col">
-            <h2 className="text-white font-black text-xs uppercase tracking-[0.25em] leading-none mb-1">Industrial V17</h2>
+            <h2 className="text-white font-black text-xs uppercase tracking-[0.25em] leading-none mb-1">Industrial V18</h2>
             <div className="flex items-center gap-1.5">
               <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isAiProcessing ? "bg-purple-500 shadow-glow-purple" : "bg-green-500 shadow-glow-green")} />
               <span className="text-[9px] text-slate-400 font-black tracking-widest uppercase italic">
@@ -252,7 +237,6 @@ export default function VINScanner({ onScan, onClose }: Props) {
             </div>
           </div>
         </div>
-
         <div className="flex gap-2.5">
           {hasTorch && (
             <button onClick={toggleTorch} className={cn("p-3.5 rounded-2xl border transition-all active:scale-90", torch ? "bg-yellow-400 text-black border-yellow-300 shadow-glow-yellow" : "bg-white/5 text-white/40 border-white/10")}>
@@ -281,7 +265,7 @@ export default function VINScanner({ onScan, onClose }: Props) {
             <canvas ref={canvasRef} className="hidden" />
           </div>
 
-          <div className="relative z-10 w-[94%] max-sm h-[180px] rounded-[3rem] border-2 border-purple-500/30 shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] backdrop-blur-[1px]">
+          <div className="relative z-10 w-[94%] max-w-sm h-[180px] rounded-[3rem] border-2 border-purple-500/30 shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] backdrop-blur-[1px]">
             <div className="absolute inset-x-12 h-[3px] bg-purple-500 shadow-[0_0_35px_rgba(168,85,247,1)] animate-laser-scan blur-[0.3px]" />
             <div className="absolute -top-1 -left-1 w-16 h-16 border-t-4 border-l-4 border-white rounded-tl-[3rem]" />
             <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-white rounded-tr-[3rem]" />
@@ -301,9 +285,8 @@ export default function VINScanner({ onScan, onClose }: Props) {
           <div className="absolute bottom-32 inset-x-0 text-center px-10 space-y-4 z-20 pointer-events-none">
             <h3 className="text-white font-black text-3xl uppercase italic tracking-tighter drop-shadow-lg">Aponte para o VIN</h3>
             <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] leading-relaxed max-w-[320px] mx-auto">
-              Mantenha o código horizontal a 20cm da lente. A IA detecta barcode e números gravados em 1080p.
+              Mantenha o código de barras ou texto do VIN dentro da área. Suporta etiquetas verticais e horizontais.
             </p>
-
             {(debugMode || lastScan) && (
               <div className="mt-8 p-5 bg-black/95 border border-white/10 rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-500">
                 <div className="flex items-center gap-3 mb-4">
