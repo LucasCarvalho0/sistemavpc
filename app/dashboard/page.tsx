@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket, Trophy } from 'lucide-react'
+import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket, Trophy, Download } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import ProductionChart from '@/components/charts/ProductionChart'
 import GoalCelebration from '@/components/ui/GoalCelebration'
 import GoalEditModal from '@/components/ui/GoalEditModal'
 import ShiftEditModal from '@/components/ui/ShiftEditModal'
-import { formatTime, formatDate, cn } from '@/lib/utils'
+import { formatTime, formatDate, cn, exportToCSV } from '@/lib/utils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
 export default function DashboardPage() {
@@ -57,6 +57,18 @@ export default function DashboardPage() {
   const shiftStart = dashboardStats?.shiftStart ?? shiftConfig?.shiftStart ?? SHIFT_START
   const shiftEnd = dashboardStats?.shiftEnd ?? shiftConfig?.shiftEnd ?? SHIFT_END
 
+  const handleDownload = () => {
+    if (!dashboardStats?.recentProductions) return
+    const data = dashboardStats.recentProductions.map(p => ({
+      VIN: p.vin,
+      Funcionario: p.employee?.name || '---',
+      Versao: p.carVersion,
+      Data: formatDate(p.createdAt),
+      Hora: formatTime(p.createdAt)
+    }))
+    exportToCSV(data, `producao-${new Date().toISOString().split('T')[0]}.csv`, ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora'])
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 animate-fade-in relative">
       {goalReached && (
@@ -89,9 +101,18 @@ export default function DashboardPage() {
           </h1>
           <p className="text-slate-400 text-sm mt-0.5">{formatDate(new Date())} · Turno ativo</p>
         </div>
-        <button onClick={fetchDashboardStats} className="p-2.5 bg-secondary hover:bg-accent rounded-xl border border-border text-slate-400 hover:text-white transition-all">
-          <RefreshCw className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white rounded-xl border border-green-500/20 transition-all font-bold text-xs uppercase tracking-widest"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Baixar Dados</span>
+          </button>
+          <button onClick={fetchDashboardStats} className="p-2.5 bg-secondary hover:bg-accent rounded-xl border border-border text-slate-400 hover:text-white transition-all">
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Stats grid */}
