@@ -8,7 +8,6 @@ import {
   Users, Settings, Car, Menu, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import GoalAlert from '@/components/dashboard/GoalAlert'
 import { Toaster } from '@/components/ui/toaster'
 import AppProviders from './AppProviders'
 
@@ -75,7 +74,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AppProviders>
-      <GoalAlert />
       <Toaster />
 
       <div className="flex h-screen bg-background overflow-hidden">
