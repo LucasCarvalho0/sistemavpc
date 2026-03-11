@@ -22,12 +22,6 @@ export default function RankingPage() {
   const [loadingQ, setLoadingQ] = useState(true)
   const pdfRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchRanking()
-    const id = setInterval(fetchRanking, 10_000)
-    return () => clearInterval(id)
-  }, [fetchRanking])
-
   const fetchMonthly = () => {
     setLoadingM(true)
     fetch('/api/stats/monthly')
@@ -41,6 +35,7 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
+    fetchRanking()
     fetchMonthly()
     fetch('/api/stats/quarterly')
       .then(r => r.json())
@@ -50,7 +45,13 @@ export default function RankingPage() {
         setQuarterly([])
       })
       .finally(() => setLoadingQ(false))
-  }, [])
+
+    const id = setInterval(() => {
+      fetchRanking()
+      fetchMonthly()
+    }, 10_000)
+    return () => clearInterval(id)
+  }, [fetchRanking, fetchMonthly])
 
   const handleExportPDF = async () => {
     if (!pdfRef.current) return
