@@ -34,11 +34,11 @@ export default function DashboardPage() {
     const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
     const goalHit = total >= currentGoal
 
-    if (goalHit && celebrationCount < 2) {
+    if (goalHit && celebrationCount < 3) {
       const now = Date.now()
-      const tenMinutes = 10 * 60 * 1000
+      const twentyMinutes = 20 * 60 * 1000
 
-      if (lastCelebrationTime === 0 || (now - lastCelebrationTime >= tenMinutes)) {
+      if (lastCelebrationTime === 0 || (now - lastCelebrationTime >= twentyMinutes)) {
         if (!goalReached) {
           setGoalReached(true)
           setCelebrationCount(prev => prev + 1)
