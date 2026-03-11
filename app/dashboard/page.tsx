@@ -21,18 +21,23 @@ export default function DashboardPage() {
   const [celebrationCount, setCelebrationCount] = useState(0)
   const [lastCelebrationTime, setLastCelebrationTime] = useState(0)
 
+  // Carregar estado persistido ao montar
   useEffect(() => {
-    fetchDashboardStats()
-    fetchShiftConfig()
-    const id = setInterval(fetchDashboardStats, 30_000)
-    return () => clearInterval(id)
-  }, [fetchDashboardStats, fetchShiftConfig])
+    const shiftDate = dashboardStats?.shiftDate || new Date().toISOString().split('T')[0]
+    const saved = sessionStorage.getItem(`goal_celeb_${shiftDate}`)
+    if (saved) {
+      const { count, time } = JSON.parse(saved)
+      setCelebrationCount(count)
+      setLastCelebrationTime(time)
+    }
+  }, [dashboardStats?.shiftDate])
 
-  // Lógica de repetição da celebração: 3 vezes a cada 20 minutos
+  // Lógica de repetição da celebração: 2 vezes a cada 10 minutos
   useEffect(() => {
     const total = dashboardStats?.totalToday ?? 0
     const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
     const goalHit = total >= currentGoal
+    const shiftDate = dashboardStats?.shiftDate || new Date().toISOString().split('T')[0]
 
     if (goalHit && celebrationCount < 2) {
       const now = Date.now()
@@ -41,12 +46,19 @@ export default function DashboardPage() {
       if (lastCelebrationTime === 0 || (now - lastCelebrationTime >= tenMinutes)) {
         if (!goalReached) {
           setGoalReached(true)
-          setCelebrationCount(prev => prev + 1)
+          const newCount = celebrationCount + 1
+          setCelebrationCount(newCount)
           setLastCelebrationTime(now)
+
+          // Persistir imediatamente
+          sessionStorage.setItem(`goal_celeb_${shiftDate}`, JSON.stringify({
+            count: newCount,
+            time: now
+          }))
         }
       }
     }
-  }, [dashboardStats?.totalToday, dashboardStats?.goal, celebrationCount, lastCelebrationTime, goalReached, setGoalReached])
+  }, [dashboardStats?.totalToday, dashboardStats?.goal, dashboardStats?.shiftDate, celebrationCount, lastCelebrationTime, goalReached, setGoalReached])
 
   const total = dashboardStats?.totalToday ?? 0
   const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
