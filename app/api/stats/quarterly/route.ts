@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getQuarterStart } from '@/lib/shiftUtils'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const startDate = getQuarterStart()

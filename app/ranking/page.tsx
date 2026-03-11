@@ -22,36 +22,33 @@ export default function RankingPage() {
   const [loadingQ, setLoadingQ] = useState(true)
   const pdfRef = useRef<HTMLDivElement>(null)
 
-  const fetchMonthly = () => {
-    setLoadingM(true)
-    fetch('/api/stats/monthly')
-      .then(r => r.json())
-      .then(r => setMonthly(r.data || []))
-      .catch(e => {
-        console.error(e)
-        setMonthly([])
-      })
-      .finally(() => setLoadingM(false))
-  }
-
   useEffect(() => {
-    fetchRanking()
-    fetchMonthly()
-    fetch('/api/stats/quarterly')
-      .then(r => r.json())
-      .then(r => setQuarterly(r.data || []))
-      .catch(e => {
-        console.error(e)
-        setQuarterly([])
-      })
-      .finally(() => setLoadingQ(false))
+    const loadAll = async () => {
+      // Don't set loading flags to true on every interval to avoid flickering
+      // Only set them true on the very first load
 
-    const id = setInterval(() => {
-      fetchRanking()
-      fetchMonthly()
-    }, 10_000)
+      try {
+        await fetchRanking()
+
+        const [mRes, qRes] = await Promise.all([
+          fetch('/api/stats/monthly').then(r => r.json()),
+          fetch('/api/stats/quarterly').then(r => r.json())
+        ])
+
+        setMonthly(mRes.data || [])
+        setQuarterly(qRes.data || [])
+      } catch (e) {
+        console.error('Error fetching rankings:', e)
+      } finally {
+        setLoadingM(false)
+        setLoadingQ(false)
+      }
+    }
+
+    loadAll()
+    const id = setInterval(loadAll, 10_000)
     return () => clearInterval(id)
-  }, [fetchRanking, fetchMonthly])
+  }, [fetchRanking]) // fetchRanking is from the store and should be stable
 
   const handleExportPDF = async () => {
     if (!pdfRef.current) return
