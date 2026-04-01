@@ -82,21 +82,47 @@ export function playGoalSound() {
     })
   } catch { /* ignore */ }
 }
-export function exportToCSV(data: any[], filename: string, headers: string[]) {
-  const csvContent = [
-    headers.join(','),
-    ...data.map(row => headers.map(h => {
-      const val = row[h] || ''
-      return typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val
-    }).join(','))
-  ].join('\n')
+export function exportToExcel(data: any[], filename: string, headers: string[]) {
+  // Gera um arquivo HTML estilizado que o Excel abre como planilha
+  // Isso permite usar cores (como o azul no VIN)
+  const html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8"/>
+      <style>
+        table { border-collapse: collapse; font-family: sans-serif; }
+        th { background-color: #1e293b; color: white; border: 1px solid #cbd5e1; padding: 8px; text-transform: uppercase; font-size: 12px; }
+        td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 13px; }
+        .vin { color: #3b82f6; font-weight: bold; font-family: monospace; }
+      </style>
+    </head>
+    <body>
+      <table>
+        <thead>
+          <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${data.map(row => `
+            <tr>
+              ${headers.map(h => {
+                const val = row[h] || ''
+                const isVIN = h.toUpperCase() === 'VIN'
+                return `<td ${isVIN ? 'class="vin"' : ''}>${val}</td>`
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `.trim()
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' })
   const link = document.createElement('a')
   if (link.download !== undefined) {
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', filename)
+    link.setAttribute('download', filename.replace('.csv', '.xls'))
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()

@@ -8,7 +8,7 @@ import ProductionChart from '@/components/charts/ProductionChart'
 import GoalCelebration from '@/components/ui/GoalCelebration'
 import GoalEditModal from '@/components/ui/GoalEditModal'
 import ShiftEditModal from '@/components/ui/ShiftEditModal'
-import { formatTime, formatDate, cn, exportToCSV } from '@/lib/utils'
+import { formatTime, formatDate, cn, exportToExcel } from '@/lib/utils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
 
 export default function DashboardPage() {
@@ -76,16 +76,36 @@ export default function DashboardPage() {
   const shiftStart = dashboardStats?.shiftStart ?? shiftConfig?.shiftStart ?? SHIFT_START
   const shiftEnd = dashboardStats?.shiftEnd ?? shiftConfig?.shiftEnd ?? SHIFT_END
 
-  const handleDownload = () => {
-    if (!dashboardStats?.recentProductions) return
-    const data = dashboardStats.recentProductions.map(p => ({
-      VIN: p.vin,
-      Funcionario: p.employee?.name || '---',
-      Versao: p.carVersion,
-      Data: formatDate(p.createdAt),
-      Hora: formatTime(p.createdAt)
-    }))
-    exportToCSV(data, `producao-${new Date().toISOString().split('T')[0]}.csv`, ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora'])
+  const handleDownload = async () => {
+    try {
+      const sDate = shiftConfig?.shiftDate || new Date().toISOString().split('T')[0]
+      // Buscar todas as produções do dia/turno
+      const res = await fetch(`/api/productions?startDate=${sDate}&endDate=${sDate}`)
+      const r = await res.json()
+      const allProductions: any[] = r.data || []
+
+      if (allProductions.length === 0) {
+        alert('Nenhuma produção encontrada para este turno.')
+        return
+      }
+
+      const data = allProductions.map(p => ({
+        VIN: p.vin,
+        Funcionario: p.employee?.name || '---',
+        Versao: p.carVersion,
+        Data: formatDate(p.createdAt),
+        Hora: formatTime(p.createdAt)
+      }))
+
+      exportToExcel(
+        data,
+        `producao-${sDate}.xls`,
+        ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora']
+      )
+    } catch (e) {
+      console.error('Erro ao baixar dados:', e)
+      alert('Erro ao carregar dados para exportação.')
+    }
   }
 
   return (
@@ -291,7 +311,7 @@ export default function DashboardPage() {
                 {dashboardStats?.recentProductions?.slice(0, 10).map(p => (
                   <tr key={p.id} className="hover:bg-white/3 transition-colors">
                     <td className="px-4 md:px-0 py-3">
-                      <span className="vin text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-lg">{p.vin}</span>
+                      <span className="vin text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg">{p.vin}</span>
                     </td>
                     <td className="px-4 md:px-0 py-3 text-sm text-white font-medium">{p.employee?.name ?? '—'}</td>
                     <td className="px-4 md:px-0 py-3 text-sm text-slate-400 hidden sm:table-cell">{p.carVersion}</td>

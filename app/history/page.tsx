@@ -6,7 +6,7 @@ import { useAppStore } from '@/stores/appStore'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/form'
-import { formatDate, formatTime } from '@/lib/utils'
+import { formatDate, formatTime, exportToExcel } from '@/lib/utils'
 import type { Production } from '@/types'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -48,10 +48,14 @@ export default function HistoryPage() {
   }, [filterEmp, filterVin])
 
   const exportCSV = (rows: Production[], filename: string) => {
-    const h = ['VIN', 'Funcionário', 'Versão', 'Data', 'Hora']
-    const csv = [h, ...rows.map(p => [p.vin, p.employee?.name ?? '', p.carVersion, formatDate(p.createdAt), formatTime(p.createdAt)])].map(r => r.join(',')).join('\n')
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: filename })
-    a.click()
+    const data = rows.map(p => ({
+      VIN: p.vin,
+      Funcionário: p.employee?.name || '---',
+      Versão: p.carVersion,
+      Data: formatDate(p.createdAt),
+      Hora: formatTime(p.createdAt)
+    }))
+    exportToExcel(data, filename.replace('.csv', '.xls'), ['VIN', 'Funcionário', 'Versão', 'Data', 'Hora'])
   }
 
   const exportPDF = (rows: Production[], filename: string, title: string) => {
@@ -102,7 +106,7 @@ export default function HistoryPage() {
         halign: 'center'
       },
       columnStyles: {
-        0: { cellWidth: 45, fontStyle: 'bold' }, // VIN
+        0: { cellWidth: 45, fontStyle: 'bold', textColor: [59, 130, 246] }, // VIN em azul
         1: { cellWidth: 'auto' }, // Funcionário
         2: { cellWidth: 'auto' }, // Versão
         3: { cellWidth: 25, halign: 'center' }, // Data
@@ -118,7 +122,7 @@ export default function HistoryPage() {
   const rangeReport = async (format: 'csv' | 'pdf') => {
     const r = await fetch(`/api/reports/range?start=${rangeStart}&end=${rangeEnd}`).then(res => res.json())
     if (format === 'csv') {
-      exportCSV(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.csv`)
+      exportCSV(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.xls`)
     } else {
       const title = `Relatório de Produção: ${formatDate(rangeStart)} a ${formatDate(rangeEnd)}`
       exportPDF(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.pdf`, title)
@@ -129,7 +133,7 @@ export default function HistoryPage() {
     const [y, m] = reportMonth.split('-')
     const r = await fetch(`/api/reports/monthly?year=${y}&month=${m}`).then(res => res.json())
     if (format === 'csv') {
-      exportCSV(r.data, `relatorio-${reportMonth}.csv`)
+      exportCSV(r.data, `relatorio-${reportMonth}.xls`)
     } else {
       exportPDF(r.data, `relatorio-${reportMonth}.pdf`, `Relatório de Produção - ${reportMonth}`)
     }
@@ -143,7 +147,7 @@ export default function HistoryPage() {
           <p className="text-slate-400 text-sm mt-0.5">{productions?.length || 0} registros</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.csv`)} className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.xls`)} className="flex items-center gap-2">
             <Download className="w-4 h-4" /><span className="hidden sm:inline">CSV</span>
           </Button>
           <Button variant="outline" size="sm" onClick={() => exportPDF(productions, `producao-${new Date().toISOString().split('T')[0]}.pdf`, 'Histórico de Produção')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
@@ -242,7 +246,7 @@ export default function HistoryPage() {
               <tbody className="divide-y divide-border/50">
                 {productions.map(p => (
                   <tr key={p.id} className="hover:bg-white/3 transition-colors">
-                    <td className="px-4 md:px-0 py-3"><span className="vin text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-lg">{p.vin}</span></td>
+                    <td className="px-4 md:px-0 py-3"><span className="vin text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg">{p.vin}</span></td>
                     <td className="px-4 md:px-0 py-3 text-sm text-white font-medium">{p.employee?.name ?? '—'}</td>
                     <td className="px-4 md:px-0 py-3 text-sm text-slate-400 hidden sm:table-cell">{p.carVersion}</td>
                     <td className="px-4 md:px-0 py-3 text-sm text-slate-400 font-mono">{formatDate(p.createdAt)}</td>
