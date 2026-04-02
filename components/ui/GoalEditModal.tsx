@@ -49,7 +49,7 @@ export default function GoalEditModal({ currentGoal, onSave, onClose }: Props) {
                         <div className="flex items-center justify-center gap-6">
                             <button
                                 type="button"
-                                onClick={() => setGoal(Math.max(1, goal - 10))}
+                                onClick={() => setGoal(Math.max(1, goal - 1))}
                                 className="w-12 h-12 flex items-center justify-center bg-secondary hover:bg-white/10 rounded-2xl text-2xl font-bold text-slate-300 transition-all active:scale-90"
                             >
                                 -
@@ -62,7 +62,7 @@ export default function GoalEditModal({ currentGoal, onSave, onClose }: Props) {
                             />
                             <button
                                 type="button"
-                                onClick={() => setGoal(goal + 10)}
+                                onClick={() => setGoal(goal + 1)}
                                 className="w-12 h-12 flex items-center justify-center bg-secondary hover:bg-white/10 rounded-2xl text-2xl font-bold text-slate-300 transition-all active:scale-90"
                             >
                                 +
