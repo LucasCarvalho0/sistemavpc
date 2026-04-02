@@ -99,7 +99,7 @@ export default function DashboardPage() {
 
       exportToExcel(
         data,
-        `producao-${sDate}.xls`,
+        `producao-${sDate}.xlsx`,
         ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora']
       )
     } catch (e) {

@@ -55,7 +55,7 @@ export default function HistoryPage() {
       Data: formatDate(p.createdAt),
       Hora: formatTime(p.createdAt)
     }))
-    exportToExcel(data, filename.replace('.csv', '.xls'), ['VIN', 'Funcionário', 'Versão', 'Data', 'Hora'])
+    exportToExcel(data, filename.split('.')[0] + '.xlsx', ['VIN', 'Funcionário', 'Versão', 'Data', 'Hora'])
   }
 
   const exportPDF = (rows: Production[], filename: string, title: string) => {
@@ -122,7 +122,7 @@ export default function HistoryPage() {
   const rangeReport = async (format: 'csv' | 'pdf') => {
     const r = await fetch(`/api/reports/range?start=${rangeStart}&end=${rangeEnd}`).then(res => res.json())
     if (format === 'csv') {
-      exportCSV(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.xls`)
+      exportCSV(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.xlsx`)
     } else {
       const title = `Relatório de Produção: ${formatDate(rangeStart)} a ${formatDate(rangeEnd)}`
       exportPDF(r.data, `relatorio-${rangeStart}-a-${rangeEnd}.pdf`, title)
@@ -133,7 +133,7 @@ export default function HistoryPage() {
     const [y, m] = reportMonth.split('-')
     const r = await fetch(`/api/reports/monthly?year=${y}&month=${m}`).then(res => res.json())
     if (format === 'csv') {
-      exportCSV(r.data, `relatorio-${reportMonth}.xls`)
+      exportCSV(r.data, `relatorio-${reportMonth}.xlsx`)
     } else {
       exportPDF(r.data, `relatorio-${reportMonth}.pdf`, `Relatório de Produção - ${reportMonth}`)
     }
@@ -147,8 +147,8 @@ export default function HistoryPage() {
           <p className="text-slate-400 text-sm mt-0.5">{productions?.length || 0} registros</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.xls`)} className="flex items-center gap-2">
-            <Download className="w-4 h-4" /><span className="hidden sm:inline">CSV</span>
+          <Button variant="outline" size="sm" onClick={() => exportCSV(productions, `producao-${new Date().toISOString().split('T')[0]}.xlsx`)} className="flex items-center gap-2">
+            <Download className="w-4 h-4" /><span className="hidden sm:inline">Excel</span>
           </Button>
           <Button variant="outline" size="sm" onClick={() => exportPDF(productions, `producao-${new Date().toISOString().split('T')[0]}.pdf`, 'Histórico de Produção')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
             <FileText className="w-4 h-4" /><span className="hidden sm:inline">PDF</span>
@@ -193,7 +193,7 @@ export default function HistoryPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => rangeReport('csv')} className="flex items-center gap-2 border-slate-700 hover:bg-slate-800">
-              <Download className="w-4 h-4" />CSV
+              <Download className="w-4 h-4" />Excel
             </Button>
             <Button variant="outline" onClick={() => rangeReport('pdf')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
               <FileText className="w-4 h-4" />PDF
@@ -216,7 +216,7 @@ export default function HistoryPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => monthlyReport('csv')} className="flex items-center gap-2">
-              <Download className="w-4 h-4" />Baixar CSV
+              <Download className="w-4 h-4" />Baixar Excel
             </Button>
             <Button variant="outline" onClick={() => monthlyReport('pdf')} className="flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-blue-400/10">
               <FileText className="w-4 h-4" />Baixar PDF

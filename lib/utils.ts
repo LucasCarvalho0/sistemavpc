@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import * as XLSX from 'xlsx'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -83,49 +84,34 @@ export function playGoalSound() {
   } catch { /* ignore */ }
 }
 export function exportToExcel(data: any[], filename: string, headers: string[]) {
-  // Gera um arquivo HTML estilizado que o Excel abre como planilha
-  // Isso permite usar cores (como o azul no VIN)
-  const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-    <head>
-      <meta charset="utf-8"/>
-      <style>
-        table { border-collapse: collapse; font-family: sans-serif; }
-        th { background-color: #1e293b; color: white; border: 1px solid #cbd5e1; padding: 8px; text-transform: uppercase; font-size: 12px; }
-        td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 13px; }
-        .vin { color: #3b82f6; font-weight: bold; font-family: monospace; }
-      </style>
-    </head>
-    <body>
-      <table>
-        <thead>
-          <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
-        </thead>
-        <tbody>
-          ${data.map(row => `
-            <tr>
-              ${headers.map(h => {
-                const val = row[h] || ''
-                const isVIN = h.toUpperCase() === 'VIN'
-                return `<td ${isVIN ? 'class="vin"' : ''}>${val}</td>`
-              }).join('')}
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </body>
-    </html>
-  `.trim()
+  // Cria uma nova planilha a partir dos dados JSON
+  const worksheet = XLSX.utils.json_to_sheet(data)
+  
+  // Cria um novo livro (workbook)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Produção')
 
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' })
+  // Gera o arquivo Excel em formato binário (.xlsx)
+  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([excelBuffer], { 
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+  })
+
+  // Download do arquivo
   const link = document.createElement('a')
   if (link.download !== undefined) {
     const url = URL.createObjectURL(blob)
+    // Garante a extensão .xlsx
+    const finalFilename = filename.toLowerCase().endsWith('.xlsx') 
+      ? filename 
+      : filename.split('.')[0] + '.xlsx'
+      
     link.setAttribute('href', url)
-    link.setAttribute('download', filename.replace('.csv', '.xls'))
+    link.setAttribute('download', finalFilename)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 }
