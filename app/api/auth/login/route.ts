@@ -66,13 +66,14 @@ export async function POST(req: Request) {
         }, { status: 200 })
       }
     } else if (employee.shift === 2) {
-      const start = 1008
-      const end = 120
+      const start = 1008 // 16:48
+      const end = 120   // 02:00
       const isAllowed = currentTimeMinutes >= start || currentTimeMinutes < end
-      if (!isAllowed) {
+      if (!isAllowed && !confirmShiftEnd) {
         return NextResponse.json({ 
-          message: `Acesso negado. O 2º turno inicia às 16:48. Agora: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}` 
-        }, { status: 403 })
+          needsConfirmation: true,
+          message: `Seu horário de turno (2º) é das 16:48 às 02:00. Agora são ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}. Deseja entrar mesmo assim?` 
+        }, { status: 200 })
       }
     }
 
