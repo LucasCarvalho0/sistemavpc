@@ -14,15 +14,8 @@ export async function GET() {
 
     const where: any = { 
       shift,
-      registration: { equals: "" }, // Apenas funcionários de linha
+      password: "", // Operadores não têm senha para login
       active: true
-    }
-
-    // Regra 6: Manhã começa do zero (precisa incluir funcionários do dia)
-    if (shift === 1) {
-      where.createdAt = {
-        gte: new Date(new Date().setHours(0,0,0,0)) // Criados hoje
-      }
     }
 
     const employees = await prisma.employee.findMany({ 
@@ -53,7 +46,8 @@ export async function POST(req: Request) {
         name: name.trim(),
         registration: `WORKER-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
         shift: shift,
-        password: ""
+        password: "",
+        role: "OPERADOR"
       } 
     })
     return NextResponse.json({ data: employee }, { status: 201 })
