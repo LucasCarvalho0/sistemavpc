@@ -47,18 +47,18 @@ export async function POST(req: Request) {
     
     const currentTimeMinutes = br.hour * 60 + br.minute
     
-    // Turno 1: 06:00 (360) - 16:48 (1008)
-    // Turno 2: 16:48 (1008) - 02:00 (120)
+    // Turno 1: 06:00 (360) - 19:00 (1140)
+    // Turno 2: 16:48 (1008) - 04:00 (240)
     
     if (employee.shift === 1) {
-      const start = 120 // 02:00
-      const end = 1008 // 16:48
+      const start = 360 // 06:00
+      const end = 1140 // 19:00
       const isOutside = currentTimeMinutes < start || currentTimeMinutes > end
 
       if (isOutside && !confirmShiftEnd) {
-        let msg = `Seu horário de turno (1º) é das 02:00 às 16:48.`
-        if (currentTimeMinutes < start) msg = `O 1º turno ainda não iniciou (02:00).`
-        else msg = `O 1º turno já encerrou (16:48).`
+        let msg = `Seu horário de turno (1º) é das 06:00 às 16:48 (Extra até 19:00).`
+        if (currentTimeMinutes < start) msg = `O 1º turno ainda não iniciou (06:00).`
+        else msg = `O 1º turno já encerrou (19:00).`
 
         return NextResponse.json({ 
           needsConfirmation: true,
@@ -67,12 +67,12 @@ export async function POST(req: Request) {
       }
     } else if (employee.shift === 2) {
       const start = 1008 // 16:48
-      const end = 120   // 02:00
+      const end = 240   // 04:00
       const isAllowed = currentTimeMinutes >= start || currentTimeMinutes < end
       if (!isAllowed && !confirmShiftEnd) {
         return NextResponse.json({ 
           needsConfirmation: true,
-          message: `Seu horário de turno (2º) é das 16:48 às 02:00. Agora são ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}. Deseja entrar mesmo assim?` 
+          message: `Seu horário de turno (2º) é das 16:48 às 02:00 (Extra até 04:00). Agora são ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}. Deseja entrar mesmo assim?` 
         }, { status: 200 })
       }
     }

@@ -17,8 +17,8 @@ export async function GET() {
       user = null
     }
 
-    const shiftDate = getShiftDate()
     const shift = user?.shift ?? 1
+    const shiftDate = getShiftDate(new Date(), shift)
 
     // AUTO-FIX: Corrigir produções que ficaram no Turno 1 mas pertencem a funcionários do Turno 2
     if (shift === 2) {

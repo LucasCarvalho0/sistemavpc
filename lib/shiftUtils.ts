@@ -49,14 +49,20 @@ export function nowInBrazil(date: Date = new Date()) {
   }
 }
 
+import { SHIFT_CONFIGS } from '@/types'
+
 /**
  * Returns the "shift date" (YYYY-MM-DD) for a given timestamp.
- * Events before 05:00 AM (Brazil time) belong to the previous calendar day's shift.
+ * Rules:
+ * - Turno 1 resets at 00:00 (standard).
+ * - Turno 2 resets at 05:00 AM (events before 05:00 belong to yesterday's shift).
  */
-export function getShiftDate(date: Date = new Date()): string {
+export function getShiftDate(date: Date = new Date(), shift: number = 1): string {
   const br = nowInBrazil(date)
+  const config = SHIFT_CONFIGS[shift as keyof typeof SHIFT_CONFIGS] || SHIFT_CONFIGS[1]
+  const resetHour = config.resetHour
 
-  if (br.hour < 2) {
+  if (br.hour < resetHour) {
     // Belongs to previous day's shift
     const d = new Date(date)
     d.setDate(d.getDate() - 1)

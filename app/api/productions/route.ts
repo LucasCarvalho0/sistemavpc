@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     
     // Regra 11: Manhã vê apenas hoje. Noite vê hoje + histórico.
     if (shift === 1 && !startDate) {
-      where.shiftDate = getShiftDate()
+      where.shiftDate = getShiftDate(new Date(), shift)
     } else if (startDate || endDate) {
       where.shiftDate = {}
       if (startDate) where.shiftDate.gte = startDate
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     if (!employee?.active)
       return NextResponse.json({ message: 'Funcionário não encontrado ou inativo' }, { status: 400 })
 
-    const shiftDate = getShiftDate()
+    const shiftDate = getShiftDate(new Date(), shift)
 
     const existing = await prisma.production.findUnique({
       where: { vin: cleanVin },
