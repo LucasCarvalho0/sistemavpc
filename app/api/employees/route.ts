@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     const employee = await prisma.employee.create({ 
       data: { 
         name: name.trim(),
-        registration: "", // Funcionários de linha não têm matrícula para login
+        registration: `WORKER-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
         shift: shift,
         password: ""
       } 

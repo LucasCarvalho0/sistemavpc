@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 
-const MAX = 20
+const MAX = 50
 
 export default function EmployeesPage() {
   const { employees, createEmployee, updateEmployee, deleteEmployee } = useAppStore()

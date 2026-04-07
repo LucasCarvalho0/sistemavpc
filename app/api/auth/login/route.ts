@@ -51,13 +51,13 @@ export async function POST(req: Request) {
     // Turno 2: 16:48 (1008) - 02:00 (120)
     
     if (employee.shift === 1) {
-      const start = 360
-      const end = 1008
+      const start = 120 // 02:00
+      const end = 1008 // 16:48
       const isOutside = currentTimeMinutes < start || currentTimeMinutes > end
 
       if (isOutside && !confirmShiftEnd) {
-        let msg = `Seu horário de turno (1º) é das 06:00 às 16:48.`
-        if (currentTimeMinutes < start) msg = `O 1º turno ainda não iniciou (06:00).`
+        let msg = `Seu horário de turno (1º) é das 02:00 às 16:48.`
+        if (currentTimeMinutes < start) msg = `O 1º turno ainda não iniciou (02:00).`
         else msg = `O 1º turno já encerrou (16:48).`
 
         return NextResponse.json({ 

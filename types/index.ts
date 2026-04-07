@@ -62,7 +62,7 @@ export const CAR_VERSIONS = ['L3 (Exclusive)', 'L2 (Advancend)'] as const
 export type CarVersion = typeof CAR_VERSIONS[number]
 
 export const DAILY_GOAL = 100
-export const SHIFT_START = '16:48'
-export const SHIFT_END = '02:00'
-export const SHIFT_OVERTIME_END = '04:00'
-export const SHIFT_RESET_TIME = '05:00'
+export const SHIFT_START = '02:00'
+export const SHIFT_END = '16:48'
+export const SHIFT_OVERTIME_END = '19:00'
+export const SHIFT_RESET_TIME = '02:00'

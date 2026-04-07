@@ -132,7 +132,7 @@ export default function DashboardView({ shift, title }: DashboardViewProps) {
               {user?.name || '...'}
             </span>
             <span className="text-slate-500 text-xs tracking-tight">
-              {formatDate(new Date())} · {shift === 1 ? 'Turno Manhã (06:00 - 16:48)' : 'Turno Noite (16:48 - 02:00)'}
+              {formatDate(new Date())} · {shift === 1 ? `Turno Manhã (${shiftStart} - ${shiftEnd})` : `Turno Noite (${shiftStart} - ${shiftEnd})`}
             </span>
           </div>
         </div>

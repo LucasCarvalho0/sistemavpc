@@ -56,7 +56,7 @@ export function nowInBrazil(date: Date = new Date()) {
 export function getShiftDate(date: Date = new Date()): string {
   const br = nowInBrazil(date)
 
-  if (br.hour < 5) {
+  if (br.hour < 2) {
     // Belongs to previous day's shift
     const d = new Date(date)
     d.setDate(d.getDate() - 1)
