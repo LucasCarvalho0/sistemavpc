@@ -44,7 +44,7 @@ async function main() {
 
   // Sample Line Workers for Shift 2 (Shift 1 starts empty as requested)
   console.log('\n🌱 Adding sample Shift 2 line workers...')
-  const shift2Workers = ['Breno', 'Augusto', 'Jonathan', 'Fabiola', 'Valber']
+  const shift2Workers = ['Breno', 'Augusto', 'Jonathan', 'Fabiola', 'Valber', 'Rodrigo Santos']
   for (const name of shift2Workers) {
     await prisma.employee.upsert({
       where: { registration: `worker-2-${name.toLowerCase().replace(/\s+/g, '-')}` },

@@ -12,13 +12,26 @@ export async function GET() {
     let user
     try {
       user = session ? JSON.parse(session.value) : null
-    } catch (e) {
+    } catch (e: any) {
       console.error('DASHBOARD_SESSION_PARSE_ERROR:', e)
       user = null
     }
 
     const shiftDate = getShiftDate()
     const shift = user?.shift ?? 1
+
+    // AUTO-FIX: Corrigir produções que ficaram no Turno 1 mas pertencem a funcionários do Turno 2
+    if (shift === 2) {
+      const shift2Employees = await prisma.employee.findMany({ where: { shift: 2 }, select: { id: true } })
+      const shift2Ids = shift2Employees.map(e => e.id)
+      await prisma.production.updateMany({
+        where: { 
+          employeeId: { in: shift2Ids },
+          shift: 1 
+        },
+        data: { shift: 2 }
+      })
+    }
     
     // Regra 7/8: Manhã (Shift 1) = Apenas Hoje. Noite (Shift 2) = Todo o Histórico.
     const whereClause: any = { 
@@ -44,7 +57,7 @@ export async function GET() {
         where: whereClause,
         include: { employee: true },
         orderBy: { createdAt: 'desc' },
-        take: 20,
+        take: 100,
       }),
       prisma.production.findMany({
         where: whereClause,
