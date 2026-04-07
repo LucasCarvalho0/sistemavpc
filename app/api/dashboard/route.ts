@@ -23,7 +23,7 @@ export async function GET() {
     // AUTO-FIX: Corrigir produções que ficaram no Turno 1 mas pertencem a funcionários do Turno 2
     if (shift === 2) {
       const shift2Employees = await prisma.employee.findMany({ where: { shift: 2 }, select: { id: true } })
-      const shift2Ids = shift2Employees.map(e => e.id)
+      const shift2Ids = shift2Employees.map((e: { id: string }) => e.id)
       await prisma.production.updateMany({
         where: { 
           employeeId: { in: shift2Ids },
