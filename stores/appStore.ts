@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Employee, Production, RankingEntry, DashboardStats, ShiftConfig } from '@/types'
-import { SHIFT_START, SHIFT_END } from '@/types'
+import { SHIFT_START, SHIFT_END, SHIFT_CONFIGS } from '@/types'
 
 interface AppStore {
   employees: Employee[]

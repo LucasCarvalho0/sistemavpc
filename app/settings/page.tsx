@@ -5,7 +5,7 @@ import { Server, Clock, Target, Wifi, WifiOff, Settings, Edit2, Loader2, Check }
 import { useAppStore } from '@/stores/appStore'
 import GoalEditModal from '@/components/ui/GoalEditModal'
 import ShiftEditModal from '@/components/ui/ShiftEditModal'
-import { DAILY_GOAL, SHIFT_START, SHIFT_END, SHIFT_OVERTIME_END, SHIFT_RESET_TIME } from '@/types'
+import { DAILY_GOAL, SHIFT_START, SHIFT_END, SHIFT_CONFIGS } from '@/types'
 
 export default function SettingsPage() {
   const { dashboardStats, fetchDashboardStats, updateGoal, shiftConfig, fetchShiftConfig, updateShiftConfig } = useAppStore()
@@ -40,6 +40,11 @@ export default function SettingsPage() {
   const currentGoal = dashboardStats?.goal ?? DAILY_GOAL
   const shiftStart = shiftConfig?.shiftStart ?? SHIFT_START
   const shiftEnd = shiftConfig?.shiftEnd ?? SHIFT_END
+  
+  const currentShift = dashboardStats?.shift ?? 1
+  const configForShift = SHIFT_CONFIGS[currentShift as keyof typeof SHIFT_CONFIGS]
+  const overtimeEnd = configForShift?.extra ?? '?'
+  const resetTime = `${String(configForShift?.resetHour ?? 0).padStart(2, '0')}:00`
 
   const handleGoalSave = async (newGoal: number) => {
     await updateGoal(newGoal)
@@ -75,7 +80,7 @@ export default function SettingsPage() {
 
       <div>
         <h1 className="display font-extrabold text-2xl md:text-3xl text-white uppercase tracking-tight">Configurações</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Sistema de Produção Automotiva</p>
+        <p className="text-slate-400 text-sm mt-0.5">Sistema de Produção Automotiva (Turno {currentShift})</p>
       </div>
 
       {/* Connection */}
@@ -161,8 +166,8 @@ export default function SettingsPage() {
           {[
             { label: 'Início do turno', val: shiftStart, col: 'text-green-400', editable: true },
             { label: 'Fim do turno', val: shiftEnd, col: 'text-red-400', editable: true },
-            { label: 'Hora extra até', val: SHIFT_OVERTIME_END, col: 'text-yellow-400', editable: false },
-            { label: 'Reset automático', val: SHIFT_RESET_TIME, col: 'text-slate-400', editable: false },
+            { label: 'Hora extra até', val: overtimeEnd, col: 'text-yellow-400', editable: false },
+            { label: 'Reset automático', val: resetTime, col: 'text-slate-400', editable: false },
           ].map(item => (
             <div key={item.label} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
               <span className="text-slate-400 text-sm">{item.label}</span>

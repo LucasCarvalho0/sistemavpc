@@ -131,6 +131,7 @@ export async function GET() {
         ranking,
         shiftStart: config?.shiftStart ?? SHIFT_START,
         shiftEnd: config?.shiftEnd ?? SHIFT_END,
+        shift: shift,
       },
     })
   } catch (e: any) {

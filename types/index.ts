@@ -37,6 +37,7 @@ export interface DashboardStats {
   ranking: RankingEntry[]
   shiftStart?: string
   shiftEnd?: string
+  shift?: number
 }
 
 export interface ShiftConfig {
