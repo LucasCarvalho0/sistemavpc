@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getMonthBounds } from '@/lib/shiftUtils'
+import { cookies } from 'next/headers'
 
 export async function GET(req: Request) {
   try {
+    const session = cookies().get('session')
+    const user = session ? JSON.parse(session.value) : null
+    const shift = user?.shift ?? 1
+
     const { searchParams } = new URL(req.url)
     const year = parseInt(searchParams.get('year') ?? '')
     const month = parseInt(searchParams.get('month') ?? '')
@@ -13,7 +18,10 @@ export async function GET(req: Request) {
 
     const { startDate, endDate } = getMonthBounds(year, month)
     const productions = await prisma.production.findMany({
-      where: { shiftDate: { gte: startDate, lte: endDate } },
+      where: { 
+        shiftDate: { gte: startDate, lte: endDate },
+        employee: { shift }
+      },
       include: { employee: true },
       orderBy: { createdAt: 'asc' },
     })

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getShiftDate } from '@/lib/shiftUtils'
 import { broadcast } from '@/lib/wsManager'
 import { DAILY_GOAL } from '@/types'
+import { cookies } from 'next/headers'
 
 const VALID_VERSIONS = ['L3 (Exclusive)', 'L2 (Advancend)']
 
@@ -12,17 +13,31 @@ function validVIN(vin: string) {
 
 export async function GET(req: Request) {
   try {
+    const session = cookies().get('session')
+    let user
+    try {
+      user = session ? JSON.parse(session.value) : null
+    } catch (e) {
+      user = null
+    }
+    const shift = user?.shift || 1
+
     const { searchParams } = new URL(req.url)
     const employeeId = searchParams.get('employeeId')
     const vin = searchParams.get('vin')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {}
+    const where: any = { 
+      shift
+    }
     if (employeeId) where.employeeId = employeeId
     if (vin) where.vin = { contains: vin.toUpperCase() }
-    if (startDate || endDate) {
+    
+    // Regra 11: Manhã vê apenas hoje. Noite vê hoje + histórico.
+    if (shift === 1 && !startDate) {
+      where.shiftDate = getShiftDate()
+    } else if (startDate || endDate) {
       where.shiftDate = {}
       if (startDate) where.shiftDate.gte = startDate
       if (endDate) where.shiftDate.lte = endDate
@@ -43,6 +58,15 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const session = cookies().get('session')
+    let user
+    try {
+      user = session ? JSON.parse(session.value) : null
+    } catch (e) {
+      user = null
+    }
+    const shift = user?.shift || 1
+
     const { vin, carVersion, employeeId } = await req.json()
 
     if (!vin || !carVersion || !employeeId)
@@ -77,22 +101,30 @@ export async function POST(req: Request) {
     }
 
     const production = await prisma.production.create({
-      data: { vin: cleanVin, carVersion, employeeId, shiftDate },
+      data: { vin: cleanVin, carVersion, employeeId, shiftDate, shift },
       include: { employee: true },
     })
 
-    const totalToday = await prisma.production.count({ where: { shiftDate } })
-    const config = await prisma.shiftConfig.findUnique({ where: { shiftDate } })
+    // Lógica de total e meta baseada no turno do usuário logado
+    const whereCount: any = { 
+      shift
+    }
+    if (shift === 1) whereCount.shiftDate = shiftDate
+
+    const totalToday = await prisma.production.count({ where: whereCount })
+    const config = await prisma.shiftConfig.findUnique({ 
+      where: { shiftDate } // Nota: se ShiftConfig for global, deixamos assim, ou se for por turno, filtramos por turno.
+    })
     const currentGoal = config?.goal ?? DAILY_GOAL
 
     // Real-time broadcasts
     broadcast('production_added', production)
 
-    const ranking = await buildRanking(shiftDate)
+    const ranking = await buildRanking(shiftDate, shift)
     broadcast('ranking_updated', ranking)
 
     if (totalToday === currentGoal) {
-      broadcast('goal_reached', { total: totalToday, shiftDate })
+      broadcast('goal_reached', { total: totalToday, shiftDate, shift })
     }
 
     return NextResponse.json({ data: production }, { status: 201 })
@@ -102,10 +134,15 @@ export async function POST(req: Request) {
   }
 }
 
-async function buildRanking(shiftDate: string) {
+async function buildRanking(shiftDate: string, shift: number) {
+  const where: any = { 
+    shift
+  }
+  if (shift === 1) where.shiftDate = shiftDate
+
   const groups = await prisma.production.groupBy({
     by: ['employeeId'],
-    where: { shiftDate },
+    where: where,
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   })

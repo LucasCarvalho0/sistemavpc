@@ -9,27 +9,43 @@
 const TZ = 'America/Sao_Paulo'
 
 /** Returns the current date/time in Sao Paulo timezone as a Date-like object */
-function nowInBrazil(date: Date = new Date()) {
-  // Intl formatter gives us the individual date/time components in the target timezone
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(date)
+export function nowInBrazil(date: Date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(date)
 
-  const get = (type: string) => parts.find(p => p.type === type)!.value
-  return {
-    year: parseInt(get('year')),
-    month: parseInt(get('month')),
-    day: parseInt(get('day')),
-    hour: parseInt(get('hour')),
-    minute: parseInt(get('minute')),
-    second: parseInt(get('second')),
+    const get = (type: string) => {
+      const p = parts.find(p => p.type === type)
+      return p ? p.value : '0'
+    }
+
+    return {
+      year: parseInt(get('year')),
+      month: parseInt(get('month')),
+      day: parseInt(get('day')),
+      hour: parseInt(get('hour')),
+      minute: parseInt(get('minute')),
+      second: parseInt(get('second')),
+    }
+  } catch (error) {
+    console.error('Error in nowInBrazil:', error)
+    // Fallback to local time if Intl fails (better than crashing)
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      second: date.getSeconds(),
+    }
   }
 }
 

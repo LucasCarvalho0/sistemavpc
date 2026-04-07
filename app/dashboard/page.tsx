@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket, Trophy, Download } from 'lucide-react'
+import { Car, Target, Clock, TrendingUp, RefreshCw, Edit2, Rocket, Trophy, Download, LogOut } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import ProductionChart from '@/components/charts/ProductionChart'
 import GoalCelebration from '@/components/ui/GoalCelebration'
 import GoalEditModal from '@/components/ui/GoalEditModal'
 import ShiftEditModal from '@/components/ui/ShiftEditModal'
 import { formatTime, formatDate, cn, exportToExcel } from '@/lib/utils'
+import { exportToPDF } from '@/lib/exportUtils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
+import { useRouter } from 'next/navigation'
 
 export default function DashboardPage() {
   const {
@@ -20,6 +22,19 @@ export default function DashboardPage() {
   const [showShiftModal, setShowShiftModal] = useState(false)
   const [celebrationCount, setCelebrationCount] = useState(0)
   const [lastCelebrationTime, setLastCelebrationTime] = useState(0)
+  const [user, setUser] = useState<{ name: string; shift: number; role: string } | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => setUser(data.user))
+  }, [])
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   // Carregar estado persistido ao montar
   useEffect(() => {
@@ -79,7 +94,6 @@ export default function DashboardPage() {
   const handleDownload = async () => {
     try {
       const sDate = shiftConfig?.shiftDate || new Date().toISOString().split('T')[0]
-      // Buscar todas as produções do dia/turno
       const res = await fetch(`/api/productions?startDate=${sDate}&endDate=${sDate}`)
       const r = await res.json()
       const allProductions: any[] = r.data || []
@@ -89,19 +103,27 @@ export default function DashboardPage() {
         return
       }
 
-      const data = allProductions.map(p => ({
-        VIN: p.vin,
-        Funcionario: p.employee?.name || '---',
-        Versao: p.carVersion,
-        Data: formatDate(p.createdAt),
-        Hora: formatTime(p.createdAt)
-      }))
+      const isLeader = user?.role === 'LIDER'
 
-      exportToExcel(
-        data,
-        `producao-${sDate}.xlsx`,
-        ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora']
-      )
+      if (isLeader) {
+        // Exportação EXCEL para Líderes
+        const data = allProductions.map(p => ({
+          VIN: p.vin,
+          Funcionario: p.employee?.name || '---',
+          Versao: p.carVersion,
+          Data: formatDate(p.createdAt),
+          Hora: formatTime(p.createdAt)
+        }))
+
+        exportToExcel(
+          data,
+          `producao-${sDate}.xlsx`,
+          ['VIN', 'Funcionario', 'Versao', 'Data', 'Hora']
+        )
+      } else {
+        // Exportação PDF para Administrativo
+        exportToPDF(allProductions, `relatorio-producao-${sDate}.pdf`)
+      }
     } catch (e) {
       console.error('Erro ao baixar dados:', e)
       alert('Erro ao carregar dados para exportação.')
@@ -133,12 +155,19 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="display font-extrabold text-2xl md:text-3xl text-white uppercase tracking-tight">
             Painel de Produção
           </h1>
-          <p className="text-slate-400 text-sm mt-0.5">{formatDate(new Date())} · Turno ativo</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-black rounded-md border border-blue-500/20 uppercase tracking-widest">
+              Bem-vindo, {user?.name || '...'}
+            </span>
+            <span className="text-slate-500 text-xs tracking-tight">
+              {formatDate(new Date())} · {user?.shift === 1 ? 'Turno 1 (06:00 - 16:48)' : 'Turno 2 (16:48 - 02:00)'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -148,8 +177,21 @@ export default function DashboardPage() {
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Baixar Dados</span>
           </button>
-          <button onClick={fetchDashboardStats} className="p-2.5 bg-secondary hover:bg-accent rounded-xl border border-border text-slate-400 hover:text-white transition-all">
+          
+          <button 
+            onClick={fetchDashboardStats} 
+            className="p-2.5 bg-secondary hover:bg-accent rounded-xl border border-border text-slate-400 hover:text-white transition-all shadow-sm"
+            title="Atualizar dados"
+          >
             <RefreshCw className="w-5 h-5" />
+          </button>
+
+          <button 
+            onClick={handleLogout} 
+            className="p-2.5 bg-red-500/10 hover:bg-red-500/20 rounded-xl border border-red-500/20 text-red-400 hover:text-red-500 transition-all shadow-sm"
+            title="Sair"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -199,33 +241,53 @@ export default function DashboardPage() {
         </div>
 
         {/* Dynamic Goal Card */}
-        <div className="card group cursor-pointer hover:border-blue-500/50 transition-all" onClick={() => setShowGoalModal(true)}>
+        <div 
+          className={cn(
+            "card group transition-all",
+            user?.role === 'LIDER' ? "cursor-pointer hover:border-blue-500/50" : "cursor-default"
+          )} 
+          onClick={() => user?.role === 'LIDER' && setShowGoalModal(true)}
+        >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-slate-400 text-sm">
               <Target className="w-4 h-4 text-blue-400" />
               <span>Meta do Turno</span>
             </div>
-            <Edit2 className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition-colors" />
+            {user?.role === 'LIDER' && (
+              <Edit2 className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition-colors" />
+            )}
           </div>
           <div className="flex items-end gap-2">
             <p className="stat-num text-4xl text-blue-400">{currentGoal}</p>
-            <p className="text-xs text-slate-500 mb-1.5 uppercase font-bold tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">Alterar</p>
+            {user?.role === 'LIDER' && (
+              <p className="text-xs text-slate-500 mb-1.5 uppercase font-bold tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">Alterar</p>
+            )}
           </div>
           <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">carros / período</p>
         </div>
 
         {/* Turno — agora editável */}
-        <div className="card group cursor-pointer hover:border-purple-500/50 transition-all" onClick={() => setShowShiftModal(true)}>
+        <div 
+          className={cn(
+            "card group transition-all",
+            user?.role === 'LIDER' ? "cursor-pointer hover:border-purple-500/50" : "cursor-default"
+          )} 
+          onClick={() => user?.role === 'LIDER' && setShowShiftModal(true)}
+        >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-slate-400 text-sm">
               <Clock className="w-4 h-4 text-purple-400" />
               <span>Turno</span>
             </div>
-            <Edit2 className="w-3.5 h-3.5 text-slate-600 group-hover:text-purple-400 transition-colors" />
+            {user?.role === 'LIDER' && (
+              <Edit2 className="w-3.5 h-3.5 text-slate-600 group-hover:text-purple-400 transition-colors" />
+            )}
           </div>
           <p className="stat-num text-xl text-purple-400">{shiftStart}</p>
           <p className="text-xs text-slate-500">até {shiftEnd}</p>
-          <p className="text-[10px] text-slate-600 mt-1 uppercase font-black tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Clique para alterar</p>
+          {user?.role === 'LIDER' && (
+            <p className="text-[10px] text-slate-600 mt-1 uppercase font-black tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Clique para alterar</p>
+          )}
         </div>
       </div>
 

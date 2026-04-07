@@ -1,6 +1,8 @@
 export interface Employee {
   id: string
   name: string
+  registration: string
+  shift: number
   active: boolean
   createdAt: string
 }

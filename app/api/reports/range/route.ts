@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { cookies } from 'next/headers'
 
 export async function GET(req: Request) {
     try {
+        const session = cookies().get('session')
+        const user = session ? JSON.parse(session.value) : null
+        const shift = user?.shift ?? 1
+
         const { searchParams } = new URL(req.url)
         const start = searchParams.get('start')
         const end = searchParams.get('end')
@@ -17,6 +22,7 @@ export async function GET(req: Request) {
                     gte: start,
                     lte: end,
                 },
+                employee: { shift }
             },
             include: { employee: true },
             orderBy: { createdAt: 'asc' },

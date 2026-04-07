@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getQuarterStart } from '@/lib/shiftUtils'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
+    const session = cookies().get('session')
+    const user = session ? JSON.parse(session.value) : null
+    const shift = user?.shift ?? 1
     const startDate = getQuarterStart()
 
     const groups = await prisma.production.groupBy({
       by: ['employeeId'],
-      where: { shiftDate: { gte: startDate } },
+      where: { 
+        shiftDate: { gte: startDate },
+        employee: { shift }
+      },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     })

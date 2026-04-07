@@ -4,30 +4,36 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 model Employee {
-  id          String       @id @default(cuid())
-  name        String
-  active      Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  productions Production[]
+  id           String       @id @default(cuid())
+  name         String
+  registration String       @unique
+  password     String       @default("")
+  shift        Int          @default(1) // 1 = Turno 1, 2 = Turno 2
+  role         String       @default("ADMINISTRATIVO")
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  productions  Production[]
 
   @@map("employees")
 }
 
 model Production {
   id         String   @id @default(cuid())
-  vin        String
+  vin        String   @unique
   carVersion String
   employeeId String
   shiftDate  String
+  shift      Int      @default(1)
   createdAt  DateTime @default(now())
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  @@unique([vin])
+  @@unique([vin, shiftDate])
+  @@index([shift, shiftDate])
   @@index([shiftDate])
   @@index([employeeId])
   @@map("productions")
@@ -37,10 +43,10 @@ model ShiftConfig {
   id         String   @id @default(cuid())
   shiftDate  String   @unique
   goal       Int      @default(100)
-  shiftStart String? // ex: "16:48", null = usar padrão
-  shiftEnd   String? // ex: "02:00", null = usar padrão
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  shiftEnd   String?
+  shiftStart String?
 
   @@map("shift_configs")
 }

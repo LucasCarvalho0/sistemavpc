@@ -7,7 +7,6 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma =
   globalForPrisma.prisma ??
-  // @ts-ignore - Prisma 7 specific constructor property
   new PrismaClient({
     accelerateUrl: process.env.DATABASE_URL,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],

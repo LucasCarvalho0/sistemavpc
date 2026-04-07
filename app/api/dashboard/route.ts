@@ -2,13 +2,34 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getShiftDate, getBrazilHour } from '@/lib/shiftUtils'
 import { DAILY_GOAL, SHIFT_START, SHIFT_END } from '@/types'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
+    const session = cookies().get('session')
+    let user
+    try {
+      user = session ? JSON.parse(session.value) : null
+    } catch (e) {
+      console.error('DASHBOARD_SESSION_PARSE_ERROR:', e)
+      user = null
+    }
+
     const shiftDate = getShiftDate()
-    console.log(`[DASHBOARD_GET] shiftDate: ${shiftDate}`)
+    const shift = user?.shift ?? 1
+    
+    // Regra 7/8: Manhã (Shift 1) = Apenas Hoje. Noite (Shift 2) = Todo o Histórico.
+    const whereClause: any = { 
+      shift
+    }
+    
+    if (shift === 1) {
+      whereClause.shiftDate = shiftDate
+    }
+
+    console.log(`DASHBOARD_FETCH: shiftDate=${shiftDate}, shift=${shift}`)
 
     const [
       totalToday,
@@ -18,28 +39,28 @@ export async function GET() {
       versionDataRaw,
       rankingRaw
     ] = await Promise.all([
-      prisma.production.count({ where: { shiftDate } }),
+      prisma.production.count({ where: whereClause }),
       prisma.production.findMany({
-        where: { shiftDate },
+        where: whereClause,
         include: { employee: true },
         orderBy: { createdAt: 'desc' },
         take: 20,
       }),
       prisma.production.findMany({
-        where: { shiftDate },
+        where: whereClause,
         select: { createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.shiftConfig.findUnique({ where: { shiftDate } }),
       prisma.production.groupBy({
         by: ['carVersion'],
-        where: { shiftDate },
-        _count: { _all: true },
+        where: whereClause,
+        _count: { carVersion: true },
         orderBy: { _count: { carVersion: 'desc' } }
       }),
       prisma.production.groupBy({
         by: ['employeeId'],
-        where: { shiftDate },
+        where: whereClause,
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: 5
@@ -47,30 +68,38 @@ export async function GET() {
     ])
 
     const goal = config?.goal ?? DAILY_GOAL
-    console.log(`[DASHBOARD_GET] goal: ${goal} (fromDB: ${!!config})`)
 
-    // Map ranking data
+    // Map ranking data safely
+    const employeeIds = rankingRaw.map((g: any) => g.employeeId).filter(Boolean)
     const employees = await prisma.employee.findMany({
-      where: { id: { in: rankingRaw.map((g: any) => g.employeeId) } }
+      where: { id: { in: employeeIds } }
     })
 
-    const ranking = rankingRaw.map((g: any, i: number) => ({
-      position: i + 1,
-      employee: employees.find((e: any) => e.id === g.employeeId)!,
-      count: g._count.id
-    }))
+    const ranking = rankingRaw.map((g: any, i: number) => {
+      const emp = employees.find((e: any) => e.id === g.employeeId)
+      return {
+        position: i + 1,
+        employee: emp || { name: 'Desconhecido', registration: '?' },
+        count: g._count.id
+      }
+    })
 
     const versionData = versionDataRaw.map((v: any) => ({
-      version: v.carVersion as string,
-      count: v._count._all as number
+      version: (v.carVersion as string) || 'Não informada',
+      count: v._count.carVersion as number
     }))
 
     // Build hourly chart data
     const map = new Map<string, number>()
     allToday.forEach((p: { createdAt: Date }) => {
-      const h = getBrazilHour(p.createdAt).toString().padStart(2, '0')
-      map.set(h, (map.get(h) ?? 0) + 1)
+      try {
+        const h = getBrazilHour(p.createdAt).toString().padStart(2, '0')
+        map.set(h, (map.get(h) ?? 0) + 1)
+      } catch (err) {
+        console.error('Error calculating hour:', err)
+      }
     })
+
     let acc = 0
     const hourlyData = Array.from(map.keys())
       .sort()
@@ -94,9 +123,8 @@ export async function GET() {
   } catch (e: any) {
     console.error('DASHBOARD_API_ERROR:', e)
     return NextResponse.json({
-      message: 'Erro ao buscar estatísticas',
-      error: e.message,
-      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+      message: 'Erro ao buscar estatísticas do dashboard',
+      debug: e.message,
     }, { status: 500 })
   }
 }

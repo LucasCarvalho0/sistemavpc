@@ -38,7 +38,10 @@ function Sidebar({ onNav }: { onNav?: () => void }) {
       {/* Nav links */}
       <nav className="flex-1 p-2 lg:p-3 space-y-0.5">
         {NAV.map(item => {
-          const active = path === item.path
+          const active = item.path === '/dashboard' 
+            ? path.startsWith('/dashboard') 
+            : path === item.path
+
           return (
             <Link
               key={item.path}
@@ -109,7 +112,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <nav className="flex-1 p-4 space-y-1">
                 {NAV.map(item => {
-                  const active = path === item.path
+                  const active = item.path === '/dashboard' 
+                    ? path.startsWith('/dashboard') 
+                    : path === item.path
+
                   return (
                     <Link
                       key={item.path}
