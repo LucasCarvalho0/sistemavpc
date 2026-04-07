@@ -1,19 +1,35 @@
-import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { getShiftDate } from '@/lib/shiftUtils'
-import { SHIFT_START, SHIFT_END } from '@/types'
+import { SHIFT_START, SHIFT_END, SHIFT_CONFIGS } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
     try {
-        const shiftDate = getShiftDate()
-        console.log(`[SHIFT_GET] shiftDate: ${shiftDate}`)
-        let config = await prisma.shiftConfig.findUnique({ where: { shiftDate } })
+        const cookieStore = cookies()
+        const sessionCookie = cookieStore.get('session')
+        if (!sessionCookie) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 })
+        const session = JSON.parse(sessionCookie.value)
+        const shift = session.shift
+
+        const shiftDate = getShiftDate(new Date(), shift)
+        console.log(`[SHIFT_GET] shiftDate: ${shiftDate}, shift: ${shift}`)
+        
+        let config = await prisma.shiftConfig.findUnique({ 
+            where: { shiftDate_shift: { shiftDate, shift } } 
+        })
 
         if (!config) {
+            const defaults = SHIFT_CONFIGS[shift as keyof typeof SHIFT_CONFIGS]
             config = await prisma.shiftConfig.create({
-                data: { shiftDate, goal: 100 }
+                data: { 
+                    shiftDate, 
+                    shift,
+                    goal: 100,
+                    shiftStart: defaults?.start ?? SHIFT_START,
+                    shiftEnd: defaults?.end ?? SHIFT_END
+                }
             })
         }
 
@@ -44,11 +60,17 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Formato de horário inválido (use HH:MM)' }, { status: 400 })
         }
 
-        const shiftDate = getShiftDate()
+        const cookieStore = cookies()
+        const sessionCookie = cookieStore.get('session')
+        if (!sessionCookie) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 })
+        const session = JSON.parse(sessionCookie.value)
+        const shift = session.shift
+
+        const shiftDate = getShiftDate(new Date(), shift)
         const config = await prisma.shiftConfig.upsert({
-            where: { shiftDate },
+            where: { shiftDate_shift: { shiftDate, shift } },
             update: { shiftStart, shiftEnd },
-            create: { shiftDate, goal: 100, shiftStart, shiftEnd }
+            create: { shiftDate, shift, goal: 100, shiftStart, shiftEnd }
         })
 
         return NextResponse.json({ data: config })

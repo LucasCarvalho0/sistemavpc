@@ -43,9 +43,12 @@ export interface DashboardStats {
 export interface ShiftConfig {
   id: string
   shiftDate: string
+  shift: number
   goal: number
-  shiftStart: string | null
-  shiftEnd: string | null
+  shiftStart?: string | null
+  shiftEnd?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface RankingEntry {

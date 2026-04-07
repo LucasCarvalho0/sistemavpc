@@ -41,12 +41,14 @@ model Production {
 
 model ShiftConfig {
   id         String   @id @default(cuid())
-  shiftDate  String   @unique
+  shiftDate  String
+  shift      Int      @default(1)
   goal       Int      @default(100)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   shiftEnd   String?
   shiftStart String?
 
+  @@unique([shiftDate, shift])
   @@map("shift_configs")
 }

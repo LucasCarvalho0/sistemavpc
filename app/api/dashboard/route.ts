@@ -62,7 +62,7 @@ export async function GET() {
         select: { createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      prisma.shiftConfig.findUnique({ where: { shiftDate } }),
+      prisma.shiftConfig.findUnique({ where: { shiftDate_shift: { shiftDate, shift } } }),
       prisma.production.groupBy({
         by: ['carVersion'],
         where: whereClause,
