@@ -38,9 +38,7 @@ export async function GET() {
       shift
     }
     
-    if (shift === 1) {
-      whereClause.shiftDate = shiftDate
-    }
+    whereClause.shiftDate = shiftDate
 
     console.log(`DASHBOARD_FETCH: shiftDate=${shiftDate}, shift=${shift}`)
 

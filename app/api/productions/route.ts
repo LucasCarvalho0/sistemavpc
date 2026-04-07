@@ -34,8 +34,8 @@ export async function GET(req: Request) {
     if (employeeId) where.employeeId = employeeId
     if (vin) where.vin = { contains: vin.toUpperCase() }
     
-    // Regra 11: Manhã vê apenas hoje. Noite vê hoje + histórico.
-    if (shift === 1 && !startDate) {
+    // Aplica o filtro de data operacional do turno quando não houver filtro manual
+    if (!startDate) {
       where.shiftDate = getShiftDate(new Date(), shift)
     } else if (startDate || endDate) {
       where.shiftDate = {}
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     const whereCount: any = { 
       shift
     }
-    if (shift === 1) whereCount.shiftDate = shiftDate
+    whereCount.shiftDate = shiftDate
 
     const totalToday = await prisma.production.count({ where: whereCount })
     const config = await prisma.shiftConfig.findUnique({ 
@@ -138,7 +138,7 @@ async function buildRanking(shiftDate: string, shift: number) {
   const where: any = { 
     shift
   }
-  if (shift === 1) where.shiftDate = shiftDate
+  where.shiftDate = shiftDate
 
   const groups = await prisma.production.groupBy({
     by: ['employeeId'],
